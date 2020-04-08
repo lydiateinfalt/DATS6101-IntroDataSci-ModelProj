@@ -1,8 +1,10 @@
 # DATS6101-Spring2020-ModelingProject
 
-This repo contains a collection of Izzy Illari's work for DATS 6101 Spring 2020 at GWU. You may contact me at izzy@jlab.org or iti2103@gwu.edu for more info.
+This repo contains a collection of Team 010100's work for the modelling project for DATS 6101 Spring 2020 at GWU. 
 
-Also included is the work on the class project with fellow teammates Lucia Illari (loi2102@gwu.edu), Lydia Teinfalt (lteinfalt@gwu.edu), Omar Qusous (oqusous@gwu.edu).
+You may contact me at izzy@jlab.org or iti2103@gwu.edu for more info.
+
+Included is the work on the class project with fellow teammates Lucia Illari (loi2102@gwu.edu), Lydia Teinfalt (lteinfalt@gwu.edu), Omar Qusous (oqusous@gwu.edu).
 
 Clone repo
 -----------
