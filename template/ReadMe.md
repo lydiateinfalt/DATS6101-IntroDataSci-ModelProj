@@ -22,7 +22,7 @@ styles.css
 ----------
 
 This a css file for customized styling.
-So far the only change has been made to blockquotes. In order to use the change to blockquotes you would write "<div class="quote-container">" at the beginning and "</div>" at the end. Then in between you write your text and use ">" to start the blockquote. Your final result will look like the following:
+So far the only change has been made to blockquotes. Your final result for blockquotes in the output html file will look like the following:
 
 <div class="quote-container">
 
