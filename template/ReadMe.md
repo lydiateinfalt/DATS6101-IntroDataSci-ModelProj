@@ -42,10 +42,7 @@ This is the bib file, where we can create and save bibtex style citations. I hav
 
 Here is an example citation that should go into bibliography.bib:
 
-@misc{ citation_label,
-       
-       author = "{Last Name, First Name and others}",
-       
-       title = "{My Article}",
-       
-       year = "2006" }
+      @misc{ citation_label,
+              author = "{Last Name, First Name and others}",
+              title = "{My Article}",
+              year = "2006" }
