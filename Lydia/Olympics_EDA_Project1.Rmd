@@ -1,0 +1,84 @@
+---
+title: "Olympics_EDA"
+author: "LNT"
+date: "03/12/2020"
+output:
+ rmdformats::readthedown:
+    highlight: kate
+    code_folding: hide
+---
+
+
+```{r basicfcn, include=F}
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T, quietly = T)) stop("Package not found") } }
+```
+```{r load_packages}
+
+loadPkg("ggplot2")
+loadPkg("rmdformats")
+loadPkg("knitr")
+```
+
+```{r setup, echo=FALSE, cache=FALSE}
+
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+options(scientific=T, digits = 3) 
+```
+
+```{r read_data}
+# Load data
+# 
+olympics <- read.csv("olympic_data.csv") 
+
+```
+
+```{r bmi}
+loadPkg("dplyr")
+#source: CDC https://www.cdc.gov/healthyweight/assessing/bmi/adult_bmi/index.html
+
+#bmi = weight (kg) / [height (m)]^2
+
+
+olympics$bmi <- (olympics$Weight/olympics$Height/olympics$Height) * 10000
+
+
+
+
+
+```
+
+```{r bmi_02, echo=F}
+
+
+olympics$bmi_category <-  case_when(
+  olympics$bmi < 18.5 & olympics$Age >= 20 ~ 1,
+  olympics$bmi >= 18.5 & olympics$bmi < 25 & olympics$Age >= 20 ~ 2,
+  olympics$bmi >= 25 & olympics$bmi < 30 & olympics$Age >= 20 ~ 3,
+  olympics$bmi > 30 & olympics$Age >= 20 ~ 4,
+  TRUE ~ 0
+)
+
+
+olympics$bmi_category <- as.factor(olympics$bmi_category)
+
+
+```
+
+
+```{r write_csv}
+
+
+write.csv(olympics,'olympic_data.csv')
+
+```
+
