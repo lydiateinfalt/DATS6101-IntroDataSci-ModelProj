@@ -19,14 +19,14 @@ olympic_data.csv
 This is our olympic data in csv format. It has been modified from the kaggle dataset (https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results) from which it was originally taken. The dataset now starts at 1960 and includes the new following variables:
 
 1. Decade (factor)
-2.) First name (factor)
-3.) Last name (factor)
-4.) BMI (numeric)
-5.) BMI category (factor)
-6.) Population (numeric)
-7.) GDP (numeric)
-8.) GDPpC (numeric)
-9.) Medal: Yes or No (factor)
+2. First name (factor)
+3. Last name (factor)
+4. BMI (numeric)
+5. BMI category (factor)
+6. Population (numeric)
+7. GDP (numeric)
+8. GDPpC (numeric)
+9. Medal: Yes or No (factor)
 
 github.html
 -----------
