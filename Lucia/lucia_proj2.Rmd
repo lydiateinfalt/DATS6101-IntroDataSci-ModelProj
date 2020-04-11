@@ -1,0 +1,197 @@
+---
+title: "Olympic Data - Second Group Project"
+author: "Lucia Illari"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    #number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+# some of common options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+# knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
+knitr::opts_chunk$set(warning = F, results = 'hide', message = F)
+# knitr::opts_chunk$set(include = F)
+# knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r xkablesummary}
+loadPkg(xtable)
+loadPkg(kableExtra)
+loadPkg(stringi)
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+
+xkablevif = function(model) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( model )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+
+  vifs %>%
+    xtable() %>% 
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>% # otherwise it will only has the generic name as 'V1' for the first vector in the table
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
+}
+```
+
+```{r load_dat, results = "markup"}
+loadPkg(readr)
+setwd(getwd())
+athlete_events <- read.csv("athlete_events.csv")
+noc_regions <- read.csv("noc_regions.csv")
+
+olyp.dat <- read.csv("olympic_data.csv")
+
+athlete_events$ID <- as.factor(athlete_events$ID)
+sapply(athlete_events, class)
+```
+
+```{r medal_dat, results = "markup"}
+#mDat <- subset(athlete_events, !is.na(Medal))
+mDat <- athlete_events
+mDat$Sex <- as.numeric(mDat$Sex)
+mDat$Medal <- as.numeric(mDat$Medal)
+mDat$Medal[is.na(mDat$Medal)] <- 0
+mDat$NOC <- as.numeric(mDat$NOC)
+mDat$Sport <- as.numeric(mDat$Sport)
+
+loadPkg(ggplot2)
+ggplot(mDat, aes(x=Medal)) + geom_bar(aes(y=(..count..)/sum(..count..)))
+
+loadPkg(dplyr)
+keeps <- c("ID","Sex","Age","Height","Weight","NOC","Sport","Medal")
+dmDat <- mDat[ , keeps, drop = FALSE]
+dmDat[,] <- sapply(dmDat[,], as.numeric)
+head(dmDat)
+```
+
+```{r names, results = "markup"}
+loadPkg(stringr)
+#olyp.dat$First.Name <- word(olyp.dat$Name,1)
+#olyp.dat$Last.Name <- word(olyp.dat$Name,-1)
+
+#write.csv(olyp.dat,"olympic_data.csv", row.names = FALSE)
+```
+
+```{r name_counts, results = "markup"}
+first.names.count <- olyp.dat %>% count(First.Name)
+first.names.count[order(first.names.count$n, decreasing = TRUE),]
+last.names.count <- olyp.dat %>% count(Last.Name)
+
+loadPkg(wordcloud)
+wordcloud(words = first.names.count$First.Name, freq = first.names.count$n, min.freq = 1, max.words=100, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Paired"))
+wordcloud(words = last.names.count$Last.Name, freq = last.names.count$n, min.freq = 1, max.words=100, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Paired"))
+```
+
+
+```{r unloading, echo = FALSE}
+unloadPkg(xtable)
+unloadPkg(kableExtra)
+unloadPkg(stringi)
+unloadPkg(readr)
+unloadPkg(ggplot2)
+unloadPkg(dplyr)
+unloadPkg(stringr)
+unloadPkg(wordcloud)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
