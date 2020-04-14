@@ -82,3 +82,9 @@ write.csv(olympics,'olympic_data.csv')
 
 ```
 
+```{r}
+newdata <- c(olympics$Weight,olympics$bmi, olympics$bmi_category)
+newdata
+
+```
+
