@@ -1,0 +1,388 @@
+---
+title: "Olympic Data"
+author: "team 010100"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmdformats::readthedown:
+    css: styles.css
+    highlight: kate
+    code_folding: hide
+    number_sections: yes
+    keep_tex: yes
+    includes:
+        after_body: github.html
+bibliography: bibliography.bib
+csl: american-institute-of-physics.csl
+---
+
+## Helper Functions and RMD Setup
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+
+```{r setup, echo=FALSE, cache=FALSE}
+loadPkg(knitr)
+loadPkg(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+```{r xkablesummary}
+loadPkg(xtable)
+loadPkg(kableExtra)
+loadPkg(stringi)
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+
+xkablevif = function(model) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( model )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+
+  vifs %>%
+    xtable() %>% 
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>% # otherwise it will only has the generic name as 'V1' for the first vector in the table
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
+}
+```
+
+## Data Cleaning and EDA
+
+```{r import_data}
+olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
+olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
+head(olympic_data)
+str(olympic_data)
+```
+
+```{r, EDA1}
+
+# summary1 = xkabledply(olympic_data)
+# summary1
+```
+
+```{r, Clean DrpCols}
+loadPkg(dplyr)
+olympic_data_1 <- olympic_data %>% select(c(-ID, -Name, -Last.Name, -Height, -Weight, -Team, -Games, -City, -Event, -GDP, -Population, -Medal, -First.Name))
+
+head(olympic_data_1)
+```
+
+```{r, Clean NAs}
+length(olympic_data_1$GDPpC)
+
+sum(is.na(olympic_data_1$NOC))
+sum(is.na(olympic_data_1$Decade))
+sum(is.na(olympic_data_1$Year))
+sum(is.na(olympic_data_1$Sex))
+sum(is.na(olympic_data_1$Age))
+sum(is.na(olympic_data_1$GDPpC))
+sum(is.na(olympic_data_1$BMI.Category))
+sum(is.na(olympic_data_1$BMI))
+sum(is.na(olympic_data_1$Season))
+sum(is.na(olympic_data_1$Sport))
+sum(is.na(olympic_data_1$Medal.No.Yes))
+
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$Age))
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$GDPpC))
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$BMI))
+```
+
+```{r PairPlots}
+# loadPkg(psych)
+# pairs(olympic_data_1)
+# 
+# pairs.panels(olympic_data_1[,1:8], 
+#              method = "pearson", # correlation method
+#              hist.col = "#00AFBB", # set histogram color, can use "#22AFBB", "red",
+#              density = TRUE,  # show density plots
+#              ellipses = TRUE # show correlation ellipses
+#              )
+# unloadPkg(psych)
+```
+
+```{r, Variable Histogram & Boxplots}
+loadPkg(ggplot2)
+ggplot(olympic_data_1, aes(x=Age, fill=Medal.No.Yes)) + geom_histogram(bins = 16)
+ggplot(olympic_data_1, aes(x=Medal.No.Yes, y=Age, fill=Medal.No.Yes)) + geom_boxplot()
+
+ggplot(olympic_data_1, aes(x=BMI, fill=Medal.No.Yes)) + geom_histogram(bins = 16)
+ggplot(olympic_data_1, aes(x=Medal.No.Yes, y=BMI, fill=Medal.No.Yes)) + geom_boxplot()
+
+ggplot(olympic_data_1, aes(x=GDPpC, fill=Medal.No.Yes)) + geom_histogram(bins = 30)
+ggplot(olympic_data_1, aes(x=Medal.No.Yes, y=GDPpC, fill=Medal.No.Yes)) + geom_boxplot()
+
+```
+
+```{r, DataSummary}
+# summary1 = xkabledply(olympic_data_1)
+# summary1
+```
+
+## Modeling
+
+```{r, SplitTrainTest}
+set.seed(1)
+train_rows = sample(1:nrow(olympic_data_1), round(0.7 * nrow(olympic_data_1), 0),  replace = FALSE)
+length(train_rows) / nrow(olympic_data_1)
+data_train = olympic_data_1[train_rows, ]
+data_test = olympic_data_1[-train_rows, ]
+nrow(data_train)
+nrow(data_test)
+
+```
+
+### Logisatic Regression
+
+```{r, Q7a}
+loadPkg(regclass)
+loadPkg(ResourceSelection)
+
+OlympicsLogit_1 <- glm(Medal.No.Yes ~ Decade + Sex + Age + BMI + GDPpC + Season + Sport, data = data_train, binomial(link = "logit") )
+
+summary(OlympicsLogit_1)
+```
+
+
+```{r, Growth/decay factors}
+expcoeff <- exp(coef(OlympicsLogit_1))
+expcoeff
+```
+
+
+```{r, Q7e}
+
+LogitHoslem <- hoslem.test(data_train$Medal.No.Yes, fitted(OlympicsLogit_1))
+LogitHoslem
+```
+
+```{r, MacFaden}
+loadPkg(pscl) # use pR2( ) function to calculate McFadden statistics for model eval
+OlympicsLogitpr2 = pscl::pR2(OlympicsLogit_1)
+OlympicsLogitpr2
+```
+
+```{r, Confusion Matrix}
+loadPkg(caret)
+# accuracy = TP+TN/All
+# precision = TP / (TP + FP)
+# recall = TP / (TP + FN)
+# Fscore = (2*Precision*Recall) / sum(Precision, Recall)
+y_predict_train = predict.glm(OlympicsLogit_1, data_train[,c(3:6, 8:10)])
+y_predict_train_trans <- 1/(1+exp(-y_predict_train))
+# I'll turn the probabilities into classifications by thresholding at 0.5.
+y_predict_train_YN <- ifelse(y_predict_train_trans > 0.5, "1", "0")
+# Now I can compare with test results in a confusion matrix
+cm_train = confusionMatrix(as.factor(y_predict_train_YN), reference = data_train[, "Medal.No.Yes"] )
+cm_train
+cm_train$byClass
+
+```
+
+```{r Predict Test}
+loadPkg(caret) 
+y_predict_test = predict.glm(OlympicsLogit_1, data_test[,c(3:6, 8:10)])
+y_predict_test_trans <- 1/(1+exp(-y_predict_test))
+# I'll turn the probabilities into classifications by thresholding at 0.5.
+y_predict_test_YN <- ifelse(y_predict_test_trans > 0.5, "1", "0")
+# Now I can compare with test results in a confusion matrix
+cm1 = confusionMatrix(as.factor(y_predict_test_YN), reference = data_test[, "Medal.No.Yes"] )
+cm1
+cm1$byClass
+```
+
+
+| Model |Accuracy   | Sensitivity | Specificity | Precision |
+|-------|-----------|-------------|-------------|-----------|
+| Train |XXXXX      |XXXXX        |XXXXX        |XXXXX      |
+| Test  |XXXXX      |XXXXX        |XXXXX        |XXXXX      |
+
+
+**ROC-AUC**  
+What is the score for the logit model using ROC-AUC? We should be able to compute the ROC-AUC value for the KNN model the same way. Can you compare them?   
+```{r Q7a roc_auc for logit}
+loadPkg(pROC)
+data_test$prob=y_predict_test_trans
+h <- roc(Medal.No.Yes~prob, data=data_test)
+auc(h) 
+plot(h)
+```
+
+
+### KNN
+```{r KNN packages}
+loadPkg(caret)
+loadPkg(class)
+loadPkg(e1071)
+loadPkg(FNN) 
+loadPkg(gmodels) 
+```
+
+```{r Data Cleaning for KNN}
+olympic_data_2 <- data.table::copy(olympic_data_1)
+normalize <- function(x) {return ((x - min(x)/(max(x)-min(x))))}
+
+olympic_data_2$Age <- normalize(olympic_data_2$Age)
+olympic_data_2$GDPpC <- normalize(olympic_data_2$GDPpC)
+olympic_data_2$BMI <- normalize(olympic_data_2$BMI)
+
+olympic_data_2$Sex <- as.data.frame(dummy.code(olympic_data_2$Sex))
+olympic_data_2$Season <- as.data.frame(dummy.code(olympic_data_2$Season))
+olympic_data_2$Decade <- as.data.frame(dummy.code(olympic_data_2$Decade))
+olympic_data_2$Sport <- as.data.frame(dummy.code(olympic_data_2$Sport))
+```
+
+```{r, SplitTrainTest2}
+set.seed(1)
+train_rows2 = sample(1:nrow(olympic_data_2), round(0.7 * nrow(olympic_data_2), 0),  replace = FALSE)
+length(train_rows) / nrow(olympic_data_2)
+data_train2 = olympic_data_2[train_rows2, ]
+data_test2 = olympic_data_2[-train_rows2, ]
+nrow(data_train2)
+nrow(data_test2)
+
+```
+
+```{r KNN Function}
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  
+  # Build knn with k neighbors considered.
+  set.seed(1)
+  class_knn = knn(train = train_set,    #<- training set cases
+                  test = val_set,       #<- test set cases
+                  cl = train_class,     #<- category for classification
+                  k = k) #,                #<- number of neighbors considered
+                  # use.all = TRUE)       #<- control ties between class assignments
+                                        #   If true, all distances equal to the kth 
+                                        #   largest are included
+  
+  tab = table(class_knn, val_class)
+  
+  # Calculate the accuracy.
+  accu = sum(tab[row(tab) == col(tab)]) / sum(tab)                         
+  cbind(k = k, accuracy = accu)
+}
+```
+
+
+```{r, KNN Model}
+knn_different_k = sapply(seq(1, 21, by = 2),
+                         function(x) chooseK(x, 
+                                          train_set = data_train2[, c("Decade", "Sex", "Age", "BMI", "GDPpC", "Season", "Sport")],
+                                          val_set = data_test2[, c("Decade", "Sex", "Age", "BMI", "GDPpC", "Season", "Sport")],
+                                          train_class = data_train2[, "Medal.No.Yes"],
+                                             
+                                          val_class = data_test2[, "Medal.No.Yes"]))
+
+# Reformat the results to graph the results.
+str(knn_different_k)
+knn_different_k = data.frame(k = knn_different_k[1,],
+                             accuracy = knn_different_k[2,])
+
+plotKnn < -ggplot(knn_different_k,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+
+```
+
+
+```{r}
+
+set.seed(1)
+olympics_7NN = knn(train = data_train2[, c("Decade", "Sex", "Age", "BMI", "GDPpC", "Season", "Sport")],
+               test = data_test2[, c("Decade", "Sex", "Age", "BMI", "GDPpC", "Season", "Sport")],
+               cl = data_train2[, "Medal.No.Yes"], k = 7)
+str(olympics_7NN)
+length(olympics_7NN)
+table(olympics_7NN)
+```
+
+```{r Q5b}
+kNN_res = table(olympics_7NN, data_test2$Medal.No.Yes)
+kNN_res
+sum_o_results = sum(kNN_res)
+
+kNN_res[row(kNN_res) == col(kNN_res)]
+
+kNN_acc = sum(kNN_res[row(kNN_res) == col(kNN_res)]) / sum_o_results
+kNN_acc
+```
+
+Accuracy of model is `r kNN_acc`. Below the rest of the metrics are given.
+
+```{r Q5c}
+loadPkg(caret) 
+cm = confusionMatrix(olympics_7NN, reference = as.factor(data_test[, "Medal.No.Yes"]) )
+cm$byClass
+```
+
+# References
+
