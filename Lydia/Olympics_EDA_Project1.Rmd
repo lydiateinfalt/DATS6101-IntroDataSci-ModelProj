@@ -9,14 +9,22 @@ output:
 ---
 
 
-```{r basicfcn, include=F}
-loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T, quietly = T)) stop("Package not found") } }
-```
-```{r load_packages}
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
 
-loadPkg("ggplot2")
-loadPkg("rmdformats")
-loadPkg("knitr")
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
 ```
 
 ```{r setup, echo=FALSE, cache=FALSE}
@@ -24,67 +32,453 @@ loadPkg("knitr")
 
 ## Global options
 options(max.print="75")
-opts_chunk$set(echo=FALSE,
+knitr::opts_chunk$set(echo=FALSE,
 	             cache=TRUE,
                prompt=FALSE,
                tidy=TRUE,
                comment=NA,
                message=FALSE,
                warning=FALSE)
-opts_knit$set(width=75)
+knitr::opts_knit$set(width=75)
 options(scientific=T, digits = 3) 
+```
+
+```{r xkablesummary}
+loadPkg("xtable")
+loadPkg("kableExtra")
+loadPkg("stringi")
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+
+xkablevif = function(model) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( model )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+
+  vifs %>%
+    xtable() %>% 
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>% # otherwise it will only has the generic name as 'V1' for the first vector in the table
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
+}
+```
+
+```{r loadpackages}
+loadPkg("digest")
+loadPkg("corrplot")
+loadPkg("ggcorrplot")
+loadPkg("dplyr")
+loadPkg("ggplot2")
+loadPkg("rmdformats")
+loadPkg("knitr")
+loadPkg("lattice") 
+loadPkg("jtools")
+loadPkg("faraway")
+loadPkg("leaps")
+loadPkg("gridExtra")
 ```
 
 ```{r read_data}
 # Load data
 # 
 olympics <- read.csv("olympic_data.csv") 
-
+olympics <- na.omit(olympics)
 ```
 
-```{r bmi}
-loadPkg("dplyr")
-#source: CDC https://www.cdc.gov/healthyweight/assessing/bmi/adult_bmi/index.html
 
-#bmi = weight (kg) / [height (m)]^2
-
-
-olympics$bmi <- (olympics$Weight/olympics$Height/olympics$Height) * 10000
-
-
-
+```{r structure}
+str(olympics)
 
 
 ```
 
-```{r bmi_02, echo=F}
+```{r keep, results = "markup"}
 
-
-olympics$bmi_category <-  case_when(
-  olympics$bmi < 18.5 & olympics$Age >= 20 ~ 1,
-  olympics$bmi >= 18.5 & olympics$bmi < 25 & olympics$Age >= 20 ~ 2,
-  olympics$bmi >= 25 & olympics$bmi < 30 & olympics$Age >= 20 ~ 3,
-  olympics$bmi > 30 & olympics$Age >= 20 ~ 4,
-  TRUE ~ 0
-)
-
-
-olympics$bmi_category <- as.factor(olympics$bmi_category)
-
+olympics$Sex.Int <- c(as.numeric(as.factor(olympics$Sex)))
+olympics$NOC.Int <- c(as.numeric(as.factor(olympics$NOC)))
+olympics$Sport.Int <- c(as.numeric(as.factor(olympics$Sport)))
 
 ```
 
 
-```{r write_csv}
-
-
-write.csv(olympics,'olympic_data.csv')
-
+#Olympics Correlation plot
+```{r}
+loadPkg("GGally")
+ggcorr(olympics, label= TRUE, label_alpha = TRUE)
+unloadPkg("GGally")
 ```
 
 ```{r}
-newdata <- c(olympics$Weight,olympics$bmi, olympics$bmi_category)
-newdata
+
+olympics_df <- olympics %>% select(Sport.Int,NOC.Int, Sex.Int, Medal.No.Yes, GDPpC, GDP, Population,BMI.Category, BMI, Weight, Height, Age, Year)
+
+olympics_cor <- cor(olympics_df,use="complete.obs")
+
+corrplot.mixed(olympics_cor)
+
 
 ```
 
+```{r lattice}
+
+pairs(olympics_cor)
+```
+
+# Olympics 1915-1925.  First World War (1914-18) and 1918 (H1N1) Pandemic (aka Spanish Flu)
+[https://www.ncbi.nlm.nih.gov/books/NBK22148/] (https://www.ncbi.nlm.nih.gov/books/NBK22148/)
+The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which nearly was 0.8 percent of the 1910 population. 
+
+
+```{r read_pandemic_data}
+
+p_olympics <- read.csv("pandemic_olympics.csv")
+
+
+```
+(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.)
+
+```{r H1N1_pandemic}
+
+
+NOC_SF <- c("ITA", "BUL", "POR", "ESP", "NED", "SWE", "FRG", "GDR", "GER", "SAA", "SUI", "FRA", "NOR", "DEN", "GBR", "USA")
+
+pre_pandemic_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1908 & Year <= 1915,
+                                         NOC %in% NOC_SF,
+                                         Medal != 0) %>% group_by(NOC, Year, Medal) %>% tally()
+pre_pandemic_NOC_Yr_Mdl <- subset(pre_pandemic_NOC_Yr_Mdl, NOC %in% NOC_SF)
+pre_pandemic_NOC_Yr_Mdl <- data.frame(pre_pandemic_NOC_Yr_Mdl)
+
+
+
+# counting medals won by each country for every sport
+pre_pandemic_NOC_Yr_Mdl_sprt <- p_olympics %>% filter(Year >= 1908 & Year <= 1915,
+                                         NOC %in% NOC_SF,
+                                         Medal != 0) %>% group_by(Year, NOC, Season, Sport, ID) %>% tally()
+pre_pandemic_NOC_Yr_Mdl_sprt <- data.frame(pre_pandemic_NOC_Yr_Mdl_sprt)
+
+
+#Post Pandemic 
+
+oly_SF_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1920 & Year <= 1924,
+                                         NOC %in% NOC_SF,
+                                         Medal != 0) %>% group_by(NOC, Year, Medal) %>% tally()
+oly_SF_NOC_Yr_Mdl <- subset(oly_SF_NOC_Yr_Mdl, NOC %in% NOC_SF)
+oly_SF_NOC_Yr_Mdl <- data.frame(oly_SF_NOC_Yr_Mdl)
+
+
+
+# counting medals won by each country for every sport
+oly_SF_NOC_Yr_Mdl_sprt <- p_olympics %>% filter(Year >= 1920 & Year <= 1924,
+                                         NOC %in% NOC_SF,
+                                         Medal != 0) %>% group_by(Year, NOC, Season, Sport, ID) %>% tally()
+oly_SF_NOC_Yr_Mdl_sprt <- data.frame(oly_SF_NOC_Yr_Mdl_sprt)
+
+
+
+```
+
+
+```{r, Bar chart: number of medals v Year Spanish FLu , include=TRUE}
+
+
+
+pre_pandemic_NOC_Yr_Mdl$Year <- as.factor(pre_pandemic_NOC_Yr_Mdl$Year)
+
+
+oly_SF_NOC_Yr_Mdl$Year <- as.factor(oly_SF_NOC_Yr_Mdl$Year)
+oly_SF_NOC_Yr_Mdl_sprt$Year <- as.factor(oly_SF_NOC_Yr_Mdl_sprt$Year)
+
+pre_pandemic_Mdl_plot <- ggplot(pre_pandemic_NOC_Yr_Mdl, aes(x=Year, y=n, fill=Medal)) +
+#  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Pre-Pandemic: Num of medals (n) vs. Year (1908-1912)", x="Year", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+
+
+#post-pandemic
+post_pandemic_Mdl_plot <- ggplot(oly_SF_NOC_Yr_Mdl, aes(x=Year, y=n, fill=Medal)) +
+#  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Post-Pandemic: Num of medals (n) vs. Year (1920-1924)", x="Year", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+
+grid.arrange(pre_pandemic_Mdl_plot, post_pandemic_Mdl_plot)
+```
+
+```{r plots_num_medals , include=TRUE}
+
+pre_pandemic_NOC_Yr_Mdl_sprt$Year <- as.factor(pre_pandemic_NOC_Yr_Mdl_sprt$Year)
+
+pre_pandemic_NOC_Mdl_plot <- ggplot(pre_pandemic_NOC_Yr_Mdl, aes(x=NOC, y=n, 
+                                                  fill=Medal)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Pre-Pandemic: Num of medals (n) vs. Country (1908-1912)", x="Country (NOC)", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+
+pre_pandemic_NOC_Mdl_plot
+
+
+post_pandemic_NOC_Mdl_plot <- ggplot(oly_SF_NOC_Yr_Mdl, aes(x=NOC, y=n, 
+                                                  fill=Medal)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Post-Pandemic: Num of medals (n) vs. Country (1920-1924)", x="Country (NOC)", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+
+post_pandemic_NOC_Mdl_plot
+
+#grid.arrange(pre_pandemic_NOC_Mdl_plot,post_pandemic_NOC_Mdl_plot )
+
+```
+
+
+
+```{r SF_Sport}
+pre_pandemic_sport <- ggplot(pre_pandemic_NOC_Yr_Mdl_sprt, aes(x=reorder(Sport, -n), y=n, color=Sport, fill=Sport)) +
+  geom_bar(aes(y=n), stat="identity") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12, hjust = 1), 
+       axis.text.y = element_text(vjust = 1, size = 12, hjust = 1), 
+       panel.border = element_rect(colour = "black", fill=NA, size=1)) + 
+  labs(title="Pre-Pandemic: Sports by Countries Impacted (1908-1912)", x="Event", y="Number of athletes") 
+pre_pandemic_sport
+
+post_pandemic_sport <- ggplot(data=oly_SF_NOC_Yr_Mdl_sprt, aes(x=reorder(Sport, -n), y=n, color=Sport, fill=Sport)) +
+ geom_bar(aes(y=n), stat="identity") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12, hjust = 1), 
+     axis.text.y = element_text(vjust = 1, size = 12, hjust = 1), 
+       panel.border = element_rect(colour = "black", fill=NA, size=1)) +   labs(title="Post-Pandemic: Sports by Countries Impacted (1920-1924)", x="Event", y="Number of athletes") 
+post_pandemic_sport
+
+#grid.arrange(pre_pandemic_sport,post_pandemic_sport)
+```
+
+```{r ageSF}
+
+#SF_medalist <- olympics %>% 
+#  filter(Medal!= "No Medal",  Year >= 1908 & Year <= 1925) 
+
+#SF_medalist <-
+#SF_medalist %>% 
+#  group_by(Year, Age, Season) %>% tally()
+
+#SF_medalist$Year <- as.factor(SF_medalist$Year)
+#SF_medalist$Season <- as.factor(SF_medalist$Season)
+
+
+#ggplot(data = SF_medalist, 
+#       mapping = aes(x = Year, y= Age, fill=Season)) +
+# geom_boxplot() +
+#  labs(title="Average Age of Olympic Medalists", x="year", y="Age") +
+#  theme_minimal() +
+#  theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
+
+```
+
+
+#Create New_data Adding Total Number of Medals
+```{r}
+loadPkg("dplyr")
+new_data  <- olympics %>% select(Year, NOC.Int, Decade, Sex, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Games, Season, City, Sport, Event, Medal, Medal.No.Yes) 
+
+new_data <- new_data %>% filter(Medal.No.Yes == "1") %>% group_by(Year) %>% add_count(Medal, name="TMedals")
+new_data
+
+
+
+```
+
+```{r, results='asis'}
+xkablesummary(new_data)
+```
+
+#Create Correlation Plot with New_data
+```{r corr}
+
+ggcorr(new_data, label= TRUE, label_alpha = TRUE)
+
+```
+
+## Linear Model1 TMedals ~ BMI
+```{r linear_model, results="markup"}
+model1 = lm(TMedals ~ BMI, data=new_data)
+sum_md1 = summary(model1)
+sum_md1
+
+```
+
+```{r vif_md1}
+
+vif_md1 = faraway::vif(model1)
+```
+
+```{r, results='asis'}
+xkabledply(sum_md1, "Linear model summary", "center")
+
+xkablevif(model1)
+```
+
+## Linear Model2 TMedals ~ Age
+```{r model2}
+model2 = lm(TMedals ~ Age, data=new_data)
+sum_md2 = summary(model2)
+sum_md2
+```
+
+```{r vifmodel2}
+vif_md2 = faraway::vif(model2)
+vif_md2
+```
+
+
+
+```{r, results='asis'}
+xkabledply(sum_md2, "Linear model2 summary", "center")
+
+xkablevif(model2)
+```
+
+## Linear Model 3
+```{r model3}
+model3 = lm(TMedals ~ NOC.Int + Population + GDP + GDPpC + Sport , data=new_data)
+sum_md3 = summary(model3)
+sum_md3
+```
+
+```{r, results='asis'}
+xkabledply(sum_md3, "Linear model3 summary", "center")
+
+xkablevif(model3)
+```
+
+
+#Select Feature
+```{r}
+
+#This is essentially best fit 
+reg.best10 <- regsubsets(TMedals~ ., data = new_data, method = "seqrep")  
+#The plot will show the Adjust R^2 when using the variables across the bottom
+plot(reg.best10, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.best10, scale = "r2", main = "R^2")
+# In the "leaps" package, we can use scale=c("bic","Cp","adjr2","r2")
+plot(reg.best10, scale = "bic", main = "BIC")
+plot(reg.best10, scale = "Cp", main = "Cp")
+summary(reg.best10)
+```
+
+```{r num}
+loadPkg("dplyr")
+medals <- data.frame(new_data$Year, new_data$Event, new_data$Sport, new_data$TMedals)
+medals
+medals1 <- data.frame(new_data$Year, new_data$TMedals)
+m<- unique(medals1)
+m
+
+medals2 <- data.frame(new_data$Year, new_data$Event)
+names(medals2) <- c("Year", "Event")
+medals2 <- medals2 %>% group_by(Year) %>% add_count(Event, name="TEvent")
+
+m2<- unique(medals2)
+m2
+
+```
+
+
+```{r}
+oly_gpby_NOC_Yr_Mdl <- olympics %>% filter(Medal != "No Medal") %>% group_by(NOC, Year, Medal) %>% tally()
+oly_gpby_NOC_Yr_Mdl <- data.frame(oly_gpby_NOC_Yr_Mdl)
+# counting medals won by each country for every sport
+oly_gpby_NOC_Yr_Mdl_sprt <- olympics %>% group_by(Sport, NOC, Year, Medal) %>% count(Medal,)
+oly_gpby_NOC_Yr_Mdl_sprt <- data.frame(oly_gpby_NOC_Yr_Mdl_sprt)
+oly_gpby_NOC_Yr_Mdl_sprt <- oly_gpby_NOC_Yr_Mdl_sprt %>% filter(Medal!=0)
+oly_gpby_NOC_Yr_Mdl_sprt$Sport_fac <- (as.numeric(as.factor(oly_gpby_NOC_Yr_Mdl_sprt$Sport)))
+```
+
+
+```{r, 3a. Bar chart: number of medals v country , include=TRUE}
+
+loadPkg("ggplot2")
+ggplot(oly_gpby_NOC_Yr_Mdl, aes(x=reorder(NOC, -n), y=n, 
+                                                  fill=Medal)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 6, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Bar chart: number of medals (n) vs. country", x="Country (NOC)", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+```
+
+```{r spanishflu}
+oly_SF_NOC_Yr_Mdl <- olympics %>% filter(Medal != "No Medal" & Year >= 1918 & Year <= 1920) %>% group_by(NOC, Year, Medal) %>% tally()
+oly_SF_NOC_Yr_Mdl <- data.frame(oly_SF_NOC_Yr_Mdl)
+# counting medals won by each country for every sport
+oly_SF_NOC_Yr_Mdl_sprt <- olympics %>% group_by(Sport, NOC, Year, Medal) %>% count(Medal,)
+oly_SF_NOC_Yr_Mdl_sprt <- data.frame(oly_SF_NOC_Yr_Mdl_sprt)
+oly_SF_NOC_Yr_Mdl_sprt <- oly_SF_NOC_Yr_Mdl_sprt %>% filter(Medal!="No Medal" & Year >= 1918 & Year <= 1920)
+oly_SF_NOC_Yr_Mdl_sprt$Sport_fac <- (as.numeric(as.factor(oly_SF_NOC_Yr_Mdl_sprt$Sport)))
+```
+
+
+
+```{r, Bar chart: number of medals v country Spanish FLu , include=TRUE}
+
+loadPkg("ggplot2")
+ggplot(oly_SF_NOC_Yr_Mdl, aes(x=reorder(NOC, -n), y=n, 
+                                                  fill=Medal)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 6, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  geom_bar(stat='identity') + 
+  labs(title="Bar chart: number of medals (n) vs. country During Spanish Flu", x="Country (NOC)", y="Number of medals (n)")+  scale_fill_manual(values=c("coral3", "goldenrod1", "darkgray"))
+```
