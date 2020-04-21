@@ -546,27 +546,6 @@ loadPkg(gridExtra)
 grid.arrange(plot_top10_F, plot_top10_M, ncol = 2, nrow = 1)
 ```
 
-```{r calc_models}
-calc_models <- function(df, xdata, ydata, titleIn, xLabel, yLabel, colorBy) {
-  #models 
-  mod_lin <- nlsLM(ydata~lin_func(xdata, a1, b1), start=list(a1=1, b1=10))
-  mod_quad <- nlsLM(ydata~quad_func(xdata, a1, b1, c1), start=list(a1=1, b1=1, c1=1))
-  mod_cubic <- nlsLM(ydata~cubic_func(xdata, a1, b1, c1, d1), start=list(a1=1, b1=1, c1=1, d1=1))
-  mod_exp <- nlsLM(ydata~exp_func(xdata, a1, b1, c1), start=list(a1=1, b1=0, c1=1))
-  
-  #plot
-  data_plot <- ggplot(use_dat, aes(x = xLabel, y=yLabel, color=colorBy)) + 
-    geom_point() +
-    theme_minimal() +
-    labs(title=titleIn, x=xLabel, y=yLabel) + 
-    theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
-        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
-  data_plot + geom_line(aes(x=xdata, y=predict(mod_lin)), color="red") + 
-    geom_line(aes(x=xdata, y=predict(mod_quad)), color="orange") +
-    geom_line(aes(x=xdata, y=predict(mod_cubic)), color="green") +
-    geom_line(aes(x=xdata, y=predict(mod_exp)), color="blue")
-}
-```
 
 ```{r}
 head(top10_sports_F)
@@ -581,8 +560,7 @@ medalist %>%
     mean = mean(Age, na.rm = TRUE)
   ) %>%
   kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  column_spec(1, bold = T, border_right = T) 
+  kable_styling(bootstrap_options = c("striped", "hover")) 
 
 summer_medalist_sex <-
   medalist %>%
@@ -605,15 +583,11 @@ summer_ages_gender <- ggplot(data = summer_medalist_sex,
 summer_ages_gender
 ```
 
-
 ```{r}
-sports <- olympic_data %>% 
-  filter(!is.na(Sport)) 
-
-swimming <-
-  sports %>%
-  filter(Sport == "Swimming") %>% 
-  group_by(Year, Sex) %>% 
+filter_data <- function(df, sport) {
+  df %>%
+    filter(Sport == sport) %>% 
+    group_by(Year, Sex) %>%
     summarise(
       mean.Age = mean(Age, na.rm = TRUE),
       sd.Age = sd(Age, na.rm = TRUE),
@@ -622,34 +596,204 @@ swimming <-
       mean.Height = mean(Height, na.rm = TRUE),
       sd.Height = sd(Height, na.rm = TRUE)
   )
+}
+```
 
-head(swimming)
+```{r}
+make_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
+  var_name_x <- eval(substitute(xVal),eval(df))
+  var_name_y <- eval(substitute(yVal),eval(df))
+  ggplot(df, mapping = aes(x = var_name_x, y = var_name_y, group = Sex, 
+                                        color = Sex)) + geom_point(size=2) + 
+    geom_line() +
+    labs(title=paste(varNameY, " of Olympic Athletes in ", sport, "\nSeparated by Gender Over ", varNameX),
+         x=paste(varNameX, unitX), y=paste(varNameY, unitY)) +
+    theme_minimal() +
+    theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
+}
+```
 
-swimming_age <- ggplot(swimming, mapping = aes(x = Year, y = mean.Age, group = Sex, color = Sex)) + geom_point(size=2) + geom_line() +
-  labs(title="Average Age \nof Olympic Athletes \nin the Summer Games \nSeparated by Gender",x="year", y="mean age [years]") +
-  theme_minimal() +
-  theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
-# + geom_errorbar(aes(ymin=mean.Age-sd.Age, ymax=mean.Age+sd.Age), width=.2, position=position_dodge(0.05))
-# swimming_age
+## Swimming
 
-swimming_weight <- ggplot(swimming, mapping = aes(x = Year, y = mean.Weight, group = Sex, color = Sex)) + geom_point(size=2) + geom_line() +
-  labs(title="Average Weight \nof Olympic Athletes \nin the Summer Games \nSeparated by Gender",x="year", y="mean weight [kg]") +
-  theme_minimal() +
-  theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
-# + geom_errorbar(aes(ymin=mean.Weight-sd.Weight, ymax=mean.Weight+sd.Weight), width=.2, position=position_dodge(0.05))
-# swimming_weight
+```{r}
+sports <- olympic_data %>% 
+  filter(!is.na(Sport)) 
 
-swimming_height <- ggplot(swimming, mapping = aes(x = Year, y = mean.Height, group = Sex, color = Sex)) + geom_point(size=2) + geom_line() +
-  labs(title="Average Height \nof Olympic Athletes \nin the Summer Games \nSeparated by Gender",x="year", y="mean height [kg]") +
-  theme_minimal() +
-  theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
-# + geom_errorbar(aes(ymin=mean.Height-sd.Height, ymax=mean.Height+sd.Height), width=.2, position=position_dodge(0.05))
-# swimming_height
+#head(sports)
+swimming <- filter_data(sports, "Swimming")
+#head(swimming)
 
-grid.arrange(swimming_age, swimming_weight, swimming_height, nrow = 1, ncol = 3)
+make_plots(swimming, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(swimming, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(swimming, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+
+#grid.arrange(swimming_age, swimming_weight, swimming_height, nrow = 1, ncol = 3)
+```
+
+### Models
+
+```{r, results='markup'}
+make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
+  var_name_x <- eval(substitute(xVal), eval(df))
+  var_name_y <- eval(substitute(yVal), eval(df))
+  
+  mod_lin <- nlsLM(var_name_y ~ lin_func(var_name_x, a1, b1), 
+                   start=list(a1=1, b1=10))
+  mod_quad <- nlsLM(var_name_y ~ quad_func(var_name_x, a1, b1, c1), 
+                    start=list(a1=1, b1=1, c1=1))
+  mod_cubic <- nlsLM(var_name_y ~ cubic_func(var_name_x, a1, b1, c1, d1), 
+                     start=list(a1=1, b1=1, c1=1, d1=1))
+  mod_exp <- nlsLM(var_name_y ~ exp_func(var_name_x, a1, b1, c1), 
+                   start=list(a1=1, b1=0, c1=1))
+  
+  data_plot <- ggplot(df, aes(x = Year, y=mean.Age, color=Sex)) + 
+    geom_point() +
+    theme_minimal() +
+    labs(title=paste(varNameY, " of Olympic Athletes in ", sport, "\nSeparated by Gender Over ", varNameX), 
+         x=paste(varNameX, unitX), y=paste(varNameY, unitY)) + 
+    theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+  
+  plot_models <- data_plot + geom_line(aes(x=var_name_x, y=predict(mod_lin)), color="red") + 
+    geom_line(aes(x=var_name_x, y=predict(mod_quad)), color="orange") +
+    geom_line(aes(x=var_name_x, y=predict(mod_cubic)), color="green") +
+    geom_line(aes(x=var_name_x, y=predict(mod_exp)), color="blue")
+  
+  anova_res <- anova(mod_lin, mod_quad, mod_exp, mod_cubic)
+  
+  return(list(plot_models, anova_res))
+}
 ```
 
 
+#### Female Athletes
+
+```{r, results='markup'}
+index_F <- which(swimming$Sex == "F")
+swimming_F <- swimming[index_F, ]
+
+res_Swimming_Age <- make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Swimming_Age[[1]]
+res_Swimming_Age[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Weight <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Swimming_Weight[[1]]
+res_Swimming_Weight[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Height <- make_model_plots(swimming_F, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Swimming_Height[[1]]
+res_Swimming_Height[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+#### Male Athletes
+
+```{r}
+index_M <- which(swimming$Sex == "M")
+swimming_M <- swimming[index_M, ]
+
+res_Swimming_Age <- make_model_plots(swimming_M, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Swimming_Age[[1]]
+res_Swimming_Age[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Weight <- make_model_plots(swimming_M, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Swimming_Weight[[1]]
+res_Swimming_Weight[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Height <- make_model_plots(swimming_M, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Swimming_Height[[1]]
+res_Swimming_Height[[2]] %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+```
+
+
+
+
+
+## Athletics
+
+```{r}
+athletics <- filter_data(sports, "Athletics")
+
+make_plots(athletics, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(athletics, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(athletics, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+## Gymnastics 
+
+```{r}
+gymnastics <- filter_data(sports, "Gymnastics")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+## Rowing
+
+```{r}
+rowing <- filter_data(sports, "Rowing")
+
+make_plots(rowing, "Rowing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(rowing, "Rowing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(rowing, "Rowing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+## Baskeball
+
+```{r}
+basketball <- filter_data(sports, "Basketball")
+
+make_plots(basketball, "Basketball", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(basketball, "Basketball", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(basketball, "Basketball", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+## Softball
+
+```{r}
+softball <- filter_data(sports, "Softball")
+
+make_plots(softball, "Softball", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(softball, "Softball", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(softball, "Softball", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+## Fencing
+
+```{r}
+fencing <- filter_data(sports, "Fencing")
+
+make_plots(fencing, "Fencing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(fencing, "Fencing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(fencing, "Fencing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
 
 ```{r unload, include=F}
 unloadPkg(tidyverse)
