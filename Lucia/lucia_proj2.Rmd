@@ -105,6 +105,57 @@ xkablevif = function(model) {
 }
 ```
 
+```{r remove_missing_factors, echo = FALSE}
+#source of code: https://stackoverflow.com/a/44316204/8902095
+remove_missing_levels <- function(fit, test_data) {
+  test_data %>%
+    droplevels() %>%
+    as.data.frame() -> test_data
+
+  if (any(class(fit) == "glmmPQL")) {
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "",
+                     names(unlist(fit$contrasts))))
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    map(fit$contrasts, function(x) names(unmatrix(x))) %>%
+      unlist() -> factor_levels
+    factor_levels %>% str_split(":", simplify = TRUE) %>%
+      extract(, 1) -> factor_levels
+
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+  } else {
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "",
+                     names(unlist(fit$xlevels))))
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    factor_levels <- unname(unlist(fit$xlevels))
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+  }
+
+  predictors <- names(test_data[names(test_data) %in% factors])
+
+  for (i in 1:length(predictors)) {
+    found <- test_data[, predictors[i]] %in% model_factors[
+      model_factors$factors == predictors[i], ]$factor_levels
+    if (any(!found)) {
+      var <- predictors[i]
+      test_data[!found, predictors[i]] <- NA
+      test_data %>%
+        droplevels() -> test_data
+      message(sprintf(paste0("Setting missing levels in '%s', only present",
+                             " in test data but missing in train data,",
+                             " to 'NA'."),
+                      var))
+    }
+  }
+  return(test_data)
+}
+```
+
 Changing some columns to factors:
 
 ```{r load_dat, results = "markup"}
@@ -213,78 +264,122 @@ I'll do this for the entire dataset first.
 # plot(reg.all, scale = "r2", main = "R^2")
 ```
 
-Okay I can't actuall do that so I guess it's by hand then.
+Okay I can't actually do that so I guess it's by hand then.
 
-```{r glm_all, results = "markup"}
+```{r all_cor, echo = FALSE}
 loadPkg(corrr)
 cor.medal <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal.No.Yes)
 cor.inc <- cor.medal[order(cor.medal$Medal.No.Yes, decreasing = FALSE),]
 cor.inc[1:6,]
 cor.dec <- cor.medal[order(cor.medal$Medal.No.Yes, decreasing = TRUE),]
-cor.dec[1:6,]
+cor.dec[1:10,]
+```
 
-glm.all <- glm(Medal.No.Yes ~ GDP + Height + Weight + Season + Sex + Population, data = olymp.dat, binomial(link = "logit"))
-glm.all$call
-#summary(glm.all)
+```{r glm_all, results = "markup"}
+glm.all <- glm(Medal.No.Yes ~ GDP + Height + Weight + Population + Sport, data = olymp.dat, binomial(link = "logit"))
+#glm.all$call
+summary(glm.all)
+
+glm.data <- remove_missing_levels (fit = glm.all, test_data = olymp.dat)
+
+#exp(coef(glm.all))
+#confint(glm.all)
+
+loadPkg(regclass)
+confusion_matrix(glm.all)
 
 loadPkg(pscl)
 pR2(glm.all)["McFadden"]
+
+loadPkg(pROC)
+prob = predict(glm.all, newdata = glm.data, type = "response")
+glm.data$prob = prob
+h <- roc(Medal.No.Yes~prob, data = glm.data)
+plot(h)
+auc(h)
 ```
 
-```{r specific_sports, results = "markup"}
-cor.swim <- cor(sapply(subset(olymp.dat, Sport == "Swimming")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.swim <- corrplot(cor.swim, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Swimming")
+```{r sports_counts, results = "markup"}
+unloadPkg(dplyr)
+loadPkg(plyr)
+freq_sports <- count(olymp.dat, "Sport")
+freq_sports <- freq_sports[order(-freq_sports$freq),]
+sports <- freq_sports$Sport
 
-cor.athl <- cor(sapply(subset(olymp.dat, Sport == "Athletics")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.swim <- corrplot(cor.athl, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Athletics")
+top_15_sports <- freq_sports[1:15,]
+num <- nrow(freq_sports)-10
+bottom_10_sports <- freq_sports[num:nrow(freq_sports),]
+bottom_10_sports
+unloadPkg(plyr)
+loadPkg(dplyr)
+```
 
-cor.row <- cor(sapply(subset(olymp.dat, Sport == "Rowing")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.row <- corrplot(cor.row, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Rowing")
+```{r cor_plot_fnct, echo = FALSE}
+cor.plotter <- function(df, var, cols){
+  var_name <- eval(substitute(var),eval(df))
+  cor.res <- cor(sapply(subset(df, Sport == var_name)[cols.num],as.numeric)[,cols], use="pairwise.complete.obs")
+  cmat.plot <- corrplot(cor.res, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = var_name)
+}
+```
 
-cor.gym <- cor(sapply(subset(olymp.dat, Sport == "Gymnastics")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.gym <- corrplot(cor.gym, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Gymnastics")
+```{r corr_sports, echo = FALSE}
+c.names <- c(1,3,5,8,9,10,11,12,14,15,16,23,24)
 
-cor.fence <- cor(sapply(subset(olymp.dat, Sport == "Fencing")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.fence <- corrplot(cor.fence, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Fencing")
-
-cor.basket <- cor(sapply(subset(olymp.dat, Sport == "Basketball")[cols.num],as.numeric)[,c(1,3,5,8,9,10,11,12,14,15,16,23,24)], use="pairwise.complete.obs")
-cmat.basket <- corrplot(cor.basket, method="pie", type = "upper", tl.col = "black", tl.srt = 45, title = "Basketball")
+for(i in 1:5) {
+  sName <- sports[i]
+  cor.plotter(olymp.dat, sName, c.names)
+}
 ```
 
 ```{r swim_fit, results = "markup"}
-swim1 <- subset(olymp.dat, Sport == "Swimming")
-swim2 <- subset(olymp.dat, Sport == "Swimming")
-swim2[cols.num] <- sapply(swim2[cols.num],as.numeric)
-
-cor.swim <- focus(correlate(swim2, use="pairwise.complete.obs"), Medal.No.Yes)
-cor.swim.inc <- cor.medal[order(cor.swim$Medal.No.Yes, decreasing = FALSE),]
-cor.swim.inc[1:6,]
-cor.swim.dec <- cor.medal[order(cor.swim$Medal.No.Yes, decreasing = TRUE),]
-cor.swim.dec[1:6,]
-
-glm.swim <- glm(Medal.No.Yes ~ GDP + NOC + Population + Height, data = swim1, binomial(link = "logit"))
-glm.swim$call
-#summary(glm.swim)
-
-pR2(glm.swim)["McFadden"]
+# swim1 <- subset(olymp.dat, Sport == "Swimming")
+# swim2 <- subset(olymp.dat, Sport == "Swimming")
+# swim2[cols.num] <- sapply(swim2[cols.num],as.numeric)
+# 
+# cor.swim <- focus(correlate(swim2, use="pairwise.complete.obs"), Medal.No.Yes)
+# cor.swim.inc <- cor.medal[order(cor.swim$Medal.No.Yes, decreasing = FALSE),]
+# #cor.swim.inc[1:6,]
+# cor.swim.dec <- cor.medal[order(cor.swim$Medal.No.Yes, decreasing = TRUE),]
+# #cor.swim.dec[1:6,]
+# 
+# glm.swim <- glm(Medal.No.Yes ~ GDP + NOC + Population + Height, data = swim1, binomial(link = "logit"))
+# glm.swim$call
+# #summary(glm.swim)
+# 
+# pR2(glm.swim)["McFadden"]
 ```
 
-```{r basketball_fit, results = "markup"}
+```{r basketball_cor, echo = FALSE}
 basket1 <- subset(olymp.dat, Sport == "Basketball")
 basket2 <- subset(olymp.dat, Sport == "Basketball")
 basket2[cols.num] <- sapply(basket2[cols.num],as.numeric)
 
 cor.b <- focus(correlate(basket2, use="pairwise.complete.obs"), Medal.No.Yes)
 cor.b.inc <- cor.b[order(cor.b$Medal.No.Yes, decreasing = FALSE),]
-cor.b.inc[1:6,]
+#cor.b.inc[1:6,]
 cor.b.dec <- cor.b[order(cor.b$Medal.No.Yes, decreasing = TRUE),]
-cor.b.dec[1:10,]
+#cor.b.dec[1:10,]
+```
 
-glm.b <- glm(Medal.No.Yes ~ GDP + NOC + Decade + Height + Weight, data = basket1, binomial(link = "logit"))
-glm.b$call
-#summary(glm.b)
+```{r basketball_fit, results = "markup"}
+glm.b <- glm(Medal.No.Yes ~ GDP + Population + Team, data = basket1, binomial(link = "logit"))
+#glm.b$call
+summary(glm.b)
+
+basket3 <- remove_missing_levels (fit = glm.b, test_data = basket1)
+
+#exp(coef(glm.b))
+#confint(glm.b)
 
 pR2(glm.b)["McFadden"]
+
+confusion_matrix(glm.b)
+
+prob = predict(glm.b, newdata = basket3, type = "response")
+basket3$prob = prob
+h.b <- roc(Medal.No.Yes~prob, data = basket3)
+plot(h.b)
+auc(h.b)
 ```
 
 What is pretty interesting is for both GDP and NOC(/Team) is an important factor, and we see that physicallity does appear to play *some* role, as for both Height showed up - Weight doesn't appear to affect the McFadden statistic as much. These are definitely better models than when we just fit the entire data set however!
@@ -293,63 +388,47 @@ Let's do some rough and dirty clustering with the 3 numeric categories in the da
 
 ```{r 3d_scatter, results = "markup"}
 loadPkg(plot3D)
-numeric.df <- olymp.dat[,c(9:11)]
-scatter3D(numeric.df[,1], numeric.df[,2], numeric.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
-          ylab ="Height (cm)", zlab = "Weight (kg)", main = "All", ticktype = "detailed")
+# numeric.df <- olymp.dat[,c(9:11)]
+# scatter3D(numeric.df[,1], numeric.df[,2], numeric.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
+#           ylab ="Height (cm)", zlab = "Weight (kg)", main = "All", ticktype = "detailed")
+# 
+# gym.df <- subset(olymp.dat, Sport == "Gymnastics")[,c(9:11)]
+# scatter3D(gym.df[,1], gym.df[,2], gym.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
+#           ylab ="Height (cm)", zlab = "Weight (kg)", main = "Gymnastics", ticktype = "detailed")
+# 
+# basket.df <- subset(olymp.dat, Sport == "Basketball")[,c(9:11)]
+# scatter3D(basket.df[,1], basket.df[,2], basket.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
+#           ylab ="Height (cm)", zlab = "Weight (kg)", main = "Basketball", ticktype = "detailed")
 
-gym.df <- subset(olymp.dat, Sport == "Gymnastics")[,c(9:11)]
-scatter3D(gym.df[,1], gym.df[,2], gym.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
-          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Gymnastics", ticktype = "detailed")
-
-basket.df <- subset(olymp.dat, Sport == "Basketball")[,c(9:11)]
-scatter3D(basket.df[,1], basket.df[,2], basket.df[,3],colkey = FALSE, bty ="g", theta = 25, phi = 40, xlab = "Age (years)",
-          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Basketball", ticktype = "detailed")
-```
-
-```{r, results = "markup"}
-soft.df <- subset(olymp.dat, Sport == "Softball")[,c(9:11)]
-scatter3D(soft.df[,1], soft.df[,2], soft.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
-          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Softball", ticktype = "detailed")
-
-beach.df <- subset(olymp.dat, Sport == "Beach Volleyball")[,c(9:11)]
-scatter3D(beach.df[,1], beach.df[,2], beach.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
-          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Beach Volleyball", ticktype = "detailed")
+# soft.df <- subset(olymp.dat, Sport == "Softball")[,c(9:11)]
+# scatter3D(soft.df[,1], soft.df[,2], soft.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+#           ylab ="Height (cm)", zlab = "Weight (kg)", main = "Softball", ticktype = "detailed")
+# 
+# beach.df <- subset(olymp.dat, Sport == "Beach Volleyball")[,c(9:11)]
+# scatter3D(beach.df[,1], beach.df[,2], beach.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+#           ylab ="Height (cm)", zlab = "Weight (kg)", main = "Beach Volleyball", ticktype = "detailed")
 
 tri.df <- subset(olymp.dat, Sport == "Triathlon")[,c(9:11)]
 scatter3D(tri.df[,1], tri.df[,2], tri.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
           ylab ="Height (cm)", zlab = "Weight (kg)", main = "Triathlon", ticktype = "detailed")
 ```
 
-```{r, results = "markup"}
-loadPkg("plyr")
-freq_sports <- count(olymp.dat, "Sport")
-freq_sports <- freq_sports[order(-freq_sports$freq),]
-top_15_sports <- freq_sports[1:15,]
-num <- nrow(freq_sports)-10
-bottom_10_sports <- freq_sports[num:nrow(freq_sports),]
-bottom_10_sports
-unloadPkg("plyr")
-```
-
-Wait a minute - before you completely forgot to take into account Population and GDP - go back and add that in, foul!
+Wait a minute - before you completely forgot to take into account Population and GDP - go back and add that in, foul! Actually, I'll make two data sets for clustering to see the results - one without GDP and Population, and one with. Let's see what effects that has on this.
 
 ```{r, include = FALSE}
-soft <- subset(olymp.dat, Sport == "Softball")[,c("Age", "Height", "Weight", "Population", "GDP")]
-soft <- soft[complete.cases(soft), ]
-soft <- na.omit(soft) #to remove any missing value that might be present in the data
-soft <- scale(soft) #data must be standardized to make variables comparable; consists of transforming the variables such that they have mean zero and standard deviation one
+triPG <- subset(olymp.dat, Sport == "Triathlon")[,c("Age", "Height", "Weight", "Population", "GDP")]
+triPG_o <- triPG
+triPG_o <- triPG_o[complete.cases(triPG_o), ]
+triPG_o <- na.omit(triPG_o)
+triPG <- triPG[complete.cases(triPG), ]
+triPG <- na.omit(triPG) #to remove any missing value that might be present in the data
+triPG <- scale(triPG)
+#data must be standardized to make variables comparable; consists of transforming the variables such that they have mean zero and standard deviation one
 
-base <- subset(olymp.dat, Sport == "Baseball")[,c("Age", "Height", "Weight", "Population", "GDP")]
-base <- base[complete.cases(base), ]
-base <- na.omit(base)
-base <- scale(base)
-
-beach <- subset(olymp.dat, Sport == "Beach Volleyball")[,c("Age", "Height", "Weight", "Population", "GDP")]
-beach <- beach[complete.cases(beach), ]
-beach <- na.omit(beach)
-beach <- scale(beach)
-
-tri <- subset(olymp.dat, Sport == "Triathlon")[,c("Age", "Height", "Weight", "Population", "GDP")]
+tri <- subset(olymp.dat, Sport == "Triathlon")[,c("Age", "Height", "Weight")]
+tri_o <- tri
+tri_o <- tri_o[complete.cases(tri_o), ]
+tri_o <- na.omit(tri_o)
 tri <- tri[complete.cases(tri), ]
 tri <- na.omit(tri)
 tri <- scale(tri)
@@ -372,88 +451,124 @@ loadPkg(gridExtra)
 loadPkg(clustertend)
 ```
 
-Create a loop that goes through the different events and then select to cluster the event that has the highest H value. That might have the most interesting results, then.
+Create a loop that goes through the different events and then select to cluster the event that has the highest H value. That might have the most interesting results, then. Ended up not doing this and just sticking with Triathlon.
 
-```{r, results = "markup"}
-print("Softball")
-get_clust_tendency(soft, n = nrow(soft)-1, graph = TRUE)
+```{r hopkins, results = "markup"}
+set.seed(123)
+print("Triathlon without Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(tri, n = nrow(tri)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Triathlon with Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(triPG, n = nrow(triPG)-1, graph = FALSE)$hopkins_stat, "\n")
 ```
 
 ```{r low_count_sports, results = "markup"}
 set.seed(123)
 
-print("Softball")
-fviz_nbclust(soft, kmeans, method = "wss")
-fviz_nbclust(soft, kmeans, method = "silhouette")
-fviz_nbclust(soft, kmeans, method = "gap_stat")
+print("Triathlon without Population and GDP")
+tk_k1 <- fviz_nbclust(tri, kmeans, method = "wss")
+tk_k2 <- fviz_nbclust(tri, kmeans, method = "silhouette")
+tk_k3 <- fviz_nbclust(tri, kmeans, method = "gap_stat")
+tk_p1 <- fviz_nbclust(tri, pam, method = "wss")
+tk_p2 <- fviz_nbclust(tri, pam, method = "silhouette")
+tk_p3 <- fviz_nbclust(tri, pam, method = "gap_stat")
 
-print("Baseball")
-get_clust_tendency(base, n = nrow(base)-1, graph = FALSE)$hopkins_stat
-fviz_nbclust(base, kmeans, method = "wss")
-fviz_nbclust(base, kmeans, method = "silhouette")
-fviz_nbclust(base, kmeans, method = "gap_stat")
+grid.arrange(tk_k1,tk_k2, tk_k3, top = "Clusters with Kmeans, without Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tk_p1,tk_p2, tk_p3, top = "Clusters with Kmedoids, without Population and GDP", ncol = 1, nrow = 3)
 
-print("Beach Volleyball")
-get_clust_tendency(beach, n = nrow(beach)-1, graph = FALSE)$hopkins_stat
-fviz_nbclust(beach, kmeans, method = "wss")
-fviz_nbclust(beach, kmeans, method = "silhouette")
-fviz_nbclust(beach, kmeans, method = "gap_stat")
+print("Triathlon with Population and GDP")
+tpgk_k1 <- fviz_nbclust(triPG, kmeans, method = "wss")
+tpgk_k2 <- fviz_nbclust(triPG, kmeans, method = "silhouette")
+tpgk_k3 <- fviz_nbclust(triPG, kmeans, method = "gap_stat")
+tpgk_p1 <- fviz_nbclust(triPG, pam, method = "wss")
+tpgk_p2 <- fviz_nbclust(triPG, pam, method = "silhouette")
+tpgk_p3 <- fviz_nbclust(triPG, pam, method = "gap_stat")
 
-print("Triathlon")
-get_clust_tendency(tri, n = nrow(tri)-1, graph = FALSE)$hopkins_stat
-fviz_nbclust(tri, kmeans, method = "wss")
-fviz_nbclust(tri, kmeans, method = "silhouette")
-fviz_nbclust(tri, kmeans, method = "gap_stat")
+grid.arrange(tpgk_k1,tpgk_k2, tpgk_k3, top = "Clusters with Kmeans, with Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tpgk_p1,tpgk_p2, tpgk_p3, top = "Clusters with Kmedoids, with Population and GDP", ncol = 1, nrow = 3)
 ```
 
 ```{r tri_clust, results = "markup"}
-kS3 <- kmeans(soft, centers = 3, nstart = 25)
-kS3$centers
+fviz_cluster(kmeans(tri, centers = 2, nstart = 25), geom = "point", data = tri)
+fviz_cluster(pam(tri, 2), geom = "point")
 
-fviz_cluster(kS3, geom = "point", data = soft, ellipse.type = "t")
-fviz_cluster(kS3, geom = "point", data = soft)
-
-
-kT2 <- kmeans(tri, centers = 2, nstart = 25)
-kT2$centers
-kT4 <- kmeans(tri, centers = 4, nstart = 25)
-kT4$centers
-
-fviz_cluster(kT2, geom = "point", data = tri, ellipse.type = "t")
-fviz_cluster(kT2, geom = "point", data = tri)
-fviz_cluster(kT4, geom = "point", data = tri, ellipse.type = "t")
-fviz_cluster(kT4, geom = "point", data = tri)
-```
-
-```{r pca_res, results = "markup"}
 get_pca(prcomp(tri))$contrib
+
+loadPkg(dplyr)
+loadPkg(tidyr)
+loadPkg(tidyverse)
+
+tri_o %>%
+  mutate(Cluster = kmeans(tri, centers = 2, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+tri_o %>%
+  mutate(Cluster = pam(tri, 2)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
 ```
 
-The dataset that was clustered has `r dim(tri)[2]` dimensions. To get a nice plot, it needs to get it down to two dimensions, so the graph produced by fviz_cluster is not some selection of two of the dimensions from the original three. Instead, they have done a PCA (Principle Components Analysis) and projected the data onto the first two principle components. Those should be the two dimensions that show the most variation in the data. The `r c(prcomp(tri)$sdev^2/sum(prcomp(tri)$sdev^2))[1]` means that the first principle component accounts for `r c(prcomp(tri)$sdev^2/sum(prcomp(tri)$sdev^2))[1]*100`% of the variation. The second principle component accounts for `r c(prcomp(tri)$sdev^2/sum(prcomp(tri)$sdev^2))[2]*100`% of the variation. So together they account for `r c(prcomp(tri)$sdev^2/sum(prcomp(tri)$sdev^2))[1]*100+ c(prcomp(tri)$sdev^2/sum(prcomp(tri)$sdev^2))[2]*100`% of the variation. 
+```{r triPG_clust, echo = FALSE}
+get_pca(prcomp(triPG))$contrib
 
-Using K-medoids instead of K-means:
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG)
+triPG_o %>%
+  mutate(Cluster = kmeans(triPG, centers = 3, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
 
-```{r kmedoids_tri, results = "markup"}
-pam(tri, 4)$medoids
-fviz_cluster(pam(tri, 4), geom = "point", ellipse.type = "t")
+fviz_cluster(kmeans(triPG, centers = 7, nstart = 25), geom = "point", data = triPG)
+triPG_o %>%
+  mutate(Cluster = kmeans(triPG, centers = 7, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+fviz_cluster(pam(triPG, 3), geom = "point")
+triPG_o %>%
+  mutate(Cluster = pam(triPG, 3)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+fviz_cluster(pam(triPG, 7), geom = "point")
+triPG_o %>%
+  mutate(Cluster = pam(triPG, 7)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
 ```
+
+```{r check_clusters, echo = FALSE}
+subset(olymp.dat, GDP >= 1.10e12 & GDP <= 1.50e12) %>% count(NOC)
+subset(olymp.dat, GDP >= 1.50e12 & GDP <= 1.10e+13) %>% count(NOC)
+subset(olymp.dat, GDP >= 1.11e13 ) %>% count(NOC)
+
+subset(olymp.dat, Population >= 5.10e+07 & Population <= 5.80e+07) %>% count(NOC)
+subset(olymp.dat, Population >= 5.80e+07 & Population <= 5.80e+08) %>% count(NOC)
+subset(olymp.dat, Population >= 5.70e+08 ) %>% count(NOC)
+```
+
+
+The dataset that was clustered has `r dim(triPG)[2]` dimensions. To get a nice plot, it needs to get it down to two dimensions, so the graph produced by fviz_cluster is not some selection of two of the dimensions from the original three. Instead, they have done a PCA (Principle Components Analysis) and projected the data onto the first two principle components. Those should be the two dimensions that show the most variation in the data. The `r c(prcomp(triPG)$sdev^2/sum(prcomp(triPG)$sdev^2))[1]` means that the first principle component accounts for `r c(prcomp(triPG)$sdev^2/sum(prcomp(triPG)$sdev^2))[1]*100`% of the variation. The second principle component accounts for `r c(prcomp(triPG)$sdev^2/sum(prcomp(triPG)$sdev^2))[2]*100`% of the variation. So together they account for `r c(prcomp(triPG)$sdev^2/sum(prcomp(triPG)$sdev^2))[1]*100+ c(prcomp(triPG)$sdev^2/sum(prcomp(triPG)$sdev^2))[2]*100`% of the variation. 
 
 Oh, apparently we can check what the plots look like for the other principal components - interesting!
 
 ```{r other_dim_tri, echo = FALSE}
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(1, 3))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(1, 4))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(1, 5))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(2, 3))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(2, 4))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(2, 5))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(3, 4))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(3, 5))
-fviz_cluster(kT4, geom = "point", data = tri, axes = c(4, 5))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(1, 3))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(1, 4))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(1, 5))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(2, 3))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(2, 4))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(2, 5))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(3, 4))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(3, 5))
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG, axes = c(4, 5))
 ```
 
 
 ```{r unloading, echo = FALSE}
+unloadPkg(regclass)
+unloadPkg(pscl)
+unloadPkg(pROC)
 unloadPkg(pscl)
 unloadPkg(corrr)
 unloadPkg(VIM)
@@ -471,6 +586,8 @@ unloadPkg(ggplot2)
 unloadPkg(dplyr)
 unloadPkg(stringr)
 unloadPkg(wordcloud)
+unloadPkg(tidyr)
+unloadPkg(tidyverse)
 ```
 
 
