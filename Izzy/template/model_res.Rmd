@@ -110,8 +110,8 @@ I'm going to try 4 different models.
 $$
 y_{\text{linear}}(x) = ax+b \\
 y_{\text{quadratic}}(x) = ax^2 + bx + c \\
-y_{\text{exponential}}(x) = a\exp(bx) + c \\
-y_{\text{cubic}}(x) = ax^3 + bx^2 + cx + d 
+y_{\text{cubic}}(x) = ax^3 + bx^2 + cx + d \\
+y_{\text{exponential}}(x) = a\exp(bx) + c
 $$
 
 And I'll be able to use `ANOVA` to test the nested models: linear vs quadratic, and exponential growth vs s-curve (sigmoid). 
@@ -133,6 +133,49 @@ exp_func <- function(x, a, b, c) {
   a*exp(b*x) + c
 }
 ```
+
+## Chi-square "rule of thumb"
+
+We consider $m$ equations that relate the $n$ random variables with values
+
+$$
+y_j = f(a_1,...,a_m,x_j) + \epsilon_j, ~~~~~ j = 1,...,n
+$$
+
+If we assume that only the $n-m$ random variables can fluctuate independently, and that the data uncertainties follow a Normal distribution, then the resulting chi-square is expected to be distributed according to
+
+$$
+\chi^2_{\nu}, ~~~~~ \nu = n - m
+$$
+
+Which we can compare to the "rule of thumb", which is
+
+$$
+\text{if } \frac{\chi^2}{n-m} \approx 1 ~~~ \text{where }\nu = n - m \implies \text{ "a good fit"}
+$$
+
+If we have $\nu$ independent RVs and the $x_i$ are each normally distributed with mean $\mu_i$ and variance $\sigma1_i^2$, then the chi-square is,
+
+$$
+\frac{\chi^2}{n-m} = \frac{\sum_{i=1}^{\nu} (x_i-\mu_i)^2/\sigma_i^2}{n-m}
+$$
+
+where $n$ is the length of our y data and $m$ is the degree of the polynomial. Using the above equation, we can calculate the values for our $\chi^2$ "rule of thumb".
+
+```{r}
+calc_chisquare <- function (model, yDat, degree) {
+  # degree of exp = 1
+  # deg of lin = 2
+  # deg of quad = 3
+  # deg of cubic = 4
+  chisquare <- (sum((predict(model)-yDat) ^ 2)/(sd(yDat) ^ 2))/(length(yDat)-degree)
+  chisquare <- round(chisquare, 3)
+  return(chisquare)
+}
+```
+
+
+## Model Fits
 
 Now I will try the model fits on the number of events per Olympic Games data. 
 
@@ -175,6 +218,27 @@ anova_res123 %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
+
+```{r}
+make_df <- function(list1, list2) {
+  # first list should be model list
+  # second list should be chi-square/dof values
+  matrix <- cbind("Model"=list1, "Chi^2/d.o.f"=list2)
+  matrix <- as.data.frame(matrix)
+  return(matrix)
+}
+```
+
+```{r}
+chisquare_list <- c(calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4))
+chisquare_list <- as.numeric(chisquare_list)
+mod_list <- c("Exponential", "Linear", "Quadratic", "Cubic")
+make_df(mod_list, chisquare_list) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
 
 # Sports
 
@@ -314,7 +378,10 @@ make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, u
   anova_res1exp <- anova(mod_lin, mod_exp) 
   anova_res123 <- anova(mod_lin, mod_quad, mod_cubic) 
   
-  return(list(plot_models, anova_res1exp, anova_res123))
+  # chisquare_list <- c(calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4))
+  # chisquare_list <- as.numeric(chisquare_list)
+  
+  return(list(plot_models, anova_res1exp, anova_res123, calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4)))
 }
 ```
 
@@ -345,6 +412,11 @@ combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Swimming_Age[[4]], res_Swimming_Age[[5]], res_Swimming_Age[[6]], res_Swimming_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Swimming_Weight <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Swimming_Weight[[1]]
 
@@ -356,6 +428,11 @@ combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Swimming_Weight[[4]], res_Swimming_Weight[[5]], res_Swimming_Weight[[6]], res_Swimming_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Swimming_Height <- make_model_plots(swimming_F, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Swimming_Height[[1]]
 
@@ -364,6 +441,11 @@ combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Height[[4]], res_Swimming_Height[[5]], res_Swimming_Height[[6]], res_Swimming_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -385,6 +467,11 @@ combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Swimming_Age[[4]], res_Swimming_Age[[5]], res_Swimming_Age[[6]], res_Swimming_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Swimming_Weight <- make_model_plots(swimming_M, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Swimming_Weight[[1]]
 
@@ -396,6 +483,11 @@ combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Swimming_Weight[[4]], res_Swimming_Weight[[5]], res_Swimming_Weight[[6]], res_Swimming_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Swimming_Height <- make_model_plots(swimming_M, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Swimming_Height[[1]]
 
@@ -404,6 +496,11 @@ combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Height[[4]], res_Swimming_Height[[5]], res_Swimming_Height[[6]], res_Swimming_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -437,6 +534,11 @@ combine_anova(res_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Weight <- make_model_plots(athletics_F, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Weight[[1]]
 
@@ -448,6 +550,11 @@ combine_anova(res_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Height <- make_model_plots(athletics_F, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Height[[1]]
 
@@ -456,6 +563,11 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -477,6 +589,11 @@ combine_anova(res_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
 res_Weight <- make_model_plots(athletics_G, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Weight[[1]]
 
@@ -488,6 +605,12 @@ combine_anova(res_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+
 res_Height <- make_model_plots(athletics_G, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Height[[1]]
 
@@ -496,6 +619,11 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -526,6 +654,11 @@ combine_anova(res_Age[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
@@ -566,6 +699,11 @@ combine_anova(res_Age[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
@@ -642,6 +780,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
 combine_anova(res_Height[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
 ### Male Athletes
@@ -680,6 +833,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -734,6 +902,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
 combine_anova(res_Height[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
 ### Male Athletes
@@ -772,6 +955,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -826,6 +1024,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
 combine_anova(res_Height[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
 ### Male Athletes
@@ -864,6 +1077,21 @@ combine_anova(res_Height[[2]], model_list_1exp) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
