@@ -48,7 +48,7 @@ So far the only change has been made to blockquotes. Your final result for block
 american-institute-of-physics.csl
 ---------------------------------
 
-This is a csl file. This file specifies the citation style. The current citation style is AIP/APS.
+This is a csl file. This file specifies the citation style. The current citation style is AIP/APS. It was taken from https://github.com/citation-style-language/styles at the following link: https://raw.githubusercontent.com/citation-style-language/styles/master/american-institute-of-physics.csl
 
 bibliography.bib
 ----------------
