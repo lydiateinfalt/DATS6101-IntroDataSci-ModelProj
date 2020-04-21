@@ -64,13 +64,13 @@ head(olympic_data)
 str(olympic_data)
 ```
 
-There is clearly an upward trend, but no seasonal pattern. The data is also a little choppy at the beginning. Part of the explanation is that the data points are not evenly spaced. Most Olympic games are 4 years apart, but a few of them are just 2 years apart, and during World War I and World War II there were 8-year and 12-year gaps, respectively. Since time series data should be evenly spaced over time, we'll only look at data from 1948 on, when the Olympics started being held every 4 years without any interruptions.
-
 ```{r}
 loadPkg(minpack.lm)
 loadPkg(kableExtra)
 loadPkg(ggplot2)
 ```
+
+Number of sports per year at the https://www.topendsports.com/events/summer/sports/number.htm [@WoodOlympEvents]
 
 ```{r}
 sports_dat <- data.frame(read.csv("sports_per_year.csv"))
@@ -84,7 +84,12 @@ ggplot(sports_dat, aes(x = Year, y=Num.Sports)) +
        x="Year", y="Number of sports") + 
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
         axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
 
+
+There is clearly an upward trend, but no seasonal pattern. The data is also a little choppy at the beginning. Part of the explanation is that the data points are not evenly spaced. Most Olympic games are 4 years apart, but a few of them are just 2 years apart, and during World War I and World War II there were 8-year and 12-year gaps, respectively. Since time series data should be evenly spaced over time, we'll only look at data from 1948 on, when the Olympics started being held every 4 years without any interruptions.
+
+```{r}
 index_1948 <- which(sports_dat$Year == 1948)
 use_dat <- sports_dat[12:nrow(sports_dat),]
 ggplot(use_dat, aes(x = Year, y=Num.Sports)) + 
@@ -153,12 +158,27 @@ data_plot + geom_line(aes(x=xdata, y=predict(mod_lin)), color="red") +
   geom_line(aes(x=xdata, y=predict(mod_cubic)), color="green") +
   geom_line(aes(x=xdata, y=predict(mod_exp)), color="blue")
 
-anova(mod_lin, mod_quad, mod_exp, mod_cubic) %>%
+model_list_1exp <- c("Linear", "Exponential")
+model_list_123 <- c("Linear", "Quadratic", "Cubic")
+
+anova_results1exp <- anova(mod_lin, mod_exp)
+anova_results123 <- anova(mod_lin, mod_quad, mod_cubic) 
+
+anova_res1exp <- cbind("Models"=model_list_1exp, anova_results1exp)
+anova_res123 <- cbind("Models"=model_list_123, anova_results123)
+
+anova_res1exp %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+anova_res123 %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
 # Sports
+
+## Top 10 Sports
 
 ```{r}
 top10_sports <- data.frame(read.csv("top_10_sports.csv"))
@@ -179,6 +199,8 @@ ggplot(top10_sports, aes(x=Year, y=Mean_Height, color=Sport)) +
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) + 
   labs(title="Plot of Olympic Heights [cm] Over The Years", x="year", y="height [kg]")
 ```
+
+## Medalists
 
 ```{r}
 loadPkg(tidyverse)
@@ -289,31 +311,59 @@ make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, u
     geom_line(aes(x=var_name_x, y=predict(mod_cubic)), color="green") +
     geom_line(aes(x=var_name_x, y=predict(mod_exp)), color="blue")
   
-  anova_res <- anova(mod_lin, mod_quad, mod_exp, mod_cubic)
+  anova_res1exp <- anova(mod_lin, mod_exp) 
+  anova_res123 <- anova(mod_lin, mod_quad, mod_cubic) 
   
-  return(list(plot_models, anova_res))
+  return(list(plot_models, anova_res1exp, anova_res123))
 }
 ```
 
 ```{r, results='markup'}
+combine_anova <- function(anova_results, model_list) {
+  anova_res <- cbind("Models"=model_list, anova_results)
+  return(anova_res)
+}
+```
+
+
+```{r, results='markup'}
+# model_list_1exp <- c("Linear", "Exponential")
+# model_list_123 <- c("Linear", "Quadratic", "Cubic")
+# model_list <- c("Linear", "Exponential", "Quadratic", "Cubic")
+
 index_F <- which(swimming$Sex == "F")
 swimming_F <- swimming[index_F, ]
 
 res_Swimming_Age <- make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
 res_Swimming_Age[[1]]
-res_Swimming_Age[[2]] %>%
+
+combine_anova(res_Swimming_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 res_Swimming_Weight <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Swimming_Weight[[1]]
-res_Swimming_Weight[[2]] %>%
+
+combine_anova(res_Swimming_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 res_Swimming_Height <- make_model_plots(swimming_F, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Swimming_Height[[1]]
-res_Swimming_Height[[2]] %>%
+
+combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
@@ -326,23 +376,499 @@ swimming_M <- swimming[index_M, ]
 
 res_Swimming_Age <- make_model_plots(swimming_M, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
 res_Swimming_Age[[1]]
-res_Swimming_Age[[2]] %>%
+
+combine_anova(res_Swimming_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 res_Swimming_Weight <- make_model_plots(swimming_M, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 res_Swimming_Weight[[1]]
-res_Swimming_Weight[[2]] %>%
+
+combine_anova(res_Swimming_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 
 res_Swimming_Height <- make_model_plots(swimming_M, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
 res_Swimming_Height[[1]]
-res_Swimming_Height[[2]] %>%
+
+combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
+## Athletics
+
+```{r}
+athletics <- filter_data(sports, "Athletics")
+
+make_plots(athletics, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(athletics, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(athletics, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+### Female Athletes
+
+```{r}
+index_F <- which(athletics$Sex == "F")
+athletics_F <- athletics[index_F, ]
+
+res_Age <- make_model_plots(athletics_F, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(athletics_F, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(athletics_F, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+### Male Athletes 
+
+```{r}
+index <- which(athletics$Sex == "M")
+athletics_G <- athletics[index, ]
+
+res_Age <- make_model_plots(athletics_G, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(athletics_G, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(athletics_G, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Gymnastics
+
+```{r}
+gymnastics <- filter_data(sports, "Gymnastics")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+### Female Athletes
+
+```{r}
+index <- which(gymnastics$Sex == "F")
+gymnastics_G <- gymnastics[index, ]
+
+res_Age <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+# res_Weight <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+# res_Weight[[1]]
+# 
+# combine_anova(res_Weight[[2]], model_list_1exp) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+# 
+# combine_anova(res_Weight[[3]], model_list_123) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+
+# res_Height <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+# res_Height[[1]]
+# 
+# combine_anova(res_Height[[2]], model_list_1exp) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+# 
+# combine_anova(res_Height[[3]], model_list_123) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+### Male Athletes
+
+```{r}
+index <- which(gymnastics$Sex == "M")
+gymnastics_G <- gymnastics[index, ]
+
+res_Age <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+# res_Weight <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+# res_Weight[[1]]
+# 
+# combine_anova(res_Weight[[2]], model_list_1exp) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+# 
+# combine_anova(res_Weight[[3]], model_list_123) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+
+# res_Height <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+# res_Height[[1]]
+# 
+# combine_anova(res_Height[[2]], model_list_1exp) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+# 
+# combine_anova(res_Height[[3]], model_list_123) %>%
+#   kable() %>%
+#   kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Rowing
+
+```{r}
+rowing <- filter_data(sports, "Rowing")
+
+make_plots(rowing, "Rowing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(rowing, "Rowing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(rowing, "Rowing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+### Female Athletes
+
+```{r}
+index <- which(rowing$Sex == "F")
+rowing_G <- rowing[index, ]
+
+res_Age <- make_model_plots(rowing_G, "Rowing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(rowing_G, "Rowing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(rowing_G, "Rowing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+### Male Athletes
+
+```{r}
+index <- which(rowing$Sex == "M")
+rowing_G <- rowing[index, ]
+
+res_Age <- make_model_plots(rowing_G, "Rowing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(rowing_G, "Rowing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(rowing_G, "Rowing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Basketball
+
+```{r}
+basketball <- filter_data(sports, "Basketball")
+
+make_plots(basketball, "Basketball", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(basketball, "Basketball", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(basketball, "Basketball", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+### Female Athletes
+
+```{r}
+index <- which(basketball$Sex == "F")
+basketball_G <- basketball[index, ]
+
+res_Age <- make_model_plots(basketball_G, "Basketball", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(basketball_G, "Basketball", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(basketball_G, "Basketball", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+### Male Athletes
+
+```{r}
+index <- which(basketball$Sex == "M")
+basketball_G <- basketball[index, ]
+
+res_Age <- make_model_plots(basketball_G, "Basketball", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(basketball_G, "Basketball", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(basketball_G, "Basketball", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Fencing
+
+```{r}
+fencing <- filter_data(sports, "Fencing")
+
+make_plots(fencing, "Fencing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(fencing, "Fencing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(fencing, "Fencing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+### Female Athletes
+
+```{r}
+index <- which(fencing$Sex == "F")
+fencing_G <- fencing[index, ]
+
+res_Age <- make_model_plots(fencing_G, "Fencing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(fencing_G, "Fencing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(fencing_G, "Fencing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+### Male Athletes
+
+```{r}
+index <- which(fencing$Sex == "M")
+fencing_G <- fencing[index, ]
+
+res_Age <- make_model_plots(fencing_G, "Fencing", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(fencing_G, "Fencing", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(fencing_G, "Fencing", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+# References
 
 
 
