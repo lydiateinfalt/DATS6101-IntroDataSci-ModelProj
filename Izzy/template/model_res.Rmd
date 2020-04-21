@@ -62,6 +62,14 @@ olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
 olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
 head(olympic_data)
 str(olympic_data)
+# loadPkg(psych)
+# pairs.panels(olympic_data, #data frame 
+#              method = "pearson", # correlation method
+#              hist.col = "#00AFBB", # set histogram color, can use "#22AFBB", "red",
+#              density = TRUE,  # show density plots
+#              ellipses = TRUE # show correlation ellipses
+#              )
+# unloadPkg(psych)
 ```
 
 ```{r}
@@ -116,19 +124,20 @@ $$
 
 And I'll be able to use `ANOVA` to test the nested models: linear vs quadratic, and exponential growth vs s-curve (sigmoid). 
 
-```{r}
+```{r func1}
+# linear model function, it takes 3 inputs
 lin_func <- function(x, a, b) {
   a*x+b
 }
-
+# quadratic model function, it takes 4 inputs
 quad_func <- function(x, a, b, c) {
   a*x*x + b*x + c
 }
-
+# cubic model function, it takes 5 inputs
 cubic_func <- function(x, a, b, c, d) {
   a*x*x*x + b*x*x + c*x + d 
 }
-
+# exponential model function, it takes 4 inputs
 exp_func <- function(x, a, b, c) {
   a*exp(b*x) + c
 }
@@ -162,7 +171,8 @@ $$
 
 where $n$ is the length of our y data and $m$ is the degree of the polynomial. Using the above equation, we can calculate the values for our $\chi^2$ "rule of thumb".
 
-```{r}
+```{r func2}
+#calculates the chisquare/dof statistic
 calc_chisquare <- function (model, yDat, degree) {
   # degree of exp = 1
   # deg of lin = 2
@@ -219,7 +229,8 @@ anova_res123 %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-```{r}
+```{r func2}
+#makes a dataframe from two lists, where the first list should be the models and the second list should be the chisquare/dof statistic
 make_df <- function(list1, list2) {
   # first list should be model list
   # second list should be chi-square/dof values
@@ -301,23 +312,36 @@ summer_ages_gender <- ggplot(data = summer_medalist_sex,
 summer_ages_gender
 ```
 
-```{r}
+```{r func3}
+#function to filter data and creates a new data frame
+#input is the data frame and the name of the sport
+#eg use the following: filter_data(olympic_data, "Rowing")
 filter_data <- function(df, sport) {
-  df %>%
+  #filters input dataframe by the Sport and groups the results by Year and Sex
+  df %>% 
     filter(Sport == sport) %>% 
     group_by(Year, Sex) %>%
     summarise(
-      mean.Age = mean(Age, na.rm = TRUE),
+      #calculates mean age for each year
+      mean.Age = mean(Age, na.rm = TRUE), 
+      #calculates standard deviation of age for each year
       sd.Age = sd(Age, na.rm = TRUE),
+      #calculates mean weight for each year
       mean.Weight = mean(Weight, na.rm = TRUE),
+      #calculates standard deviation of weight for each year
       sd.Weight = sd(Weight, na.rm = TRUE),
+      #calculates mean height for each year
       mean.Height = mean(Height, na.rm = TRUE),
+      #calculates standard deviation of height for each year
       sd.Height = sd(Height, na.rm = TRUE)
   )
 }
 ```
 
-```{r}
+```{r func4}
+#function to make the ggplots using the data frames created by the above function
+#input should be in the following style:
+# make_plots(swimming, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
 make_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
   var_name_x <- eval(substitute(xVal),eval(df))
   var_name_y <- eval(substitute(yVal),eval(df))
@@ -348,20 +372,26 @@ make_plots(swimming, "Swimming", "Years", "Average Height", Year, mean.Height, "
 
 ### Female Athletes
 
-```{r, results='markup'}
+```{r func5, results='markup'}
+#make plots with the model fits
+#to use the function write something like the following:
+#make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
 make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
   var_name_x <- eval(substitute(xVal), eval(df))
   var_name_y <- eval(substitute(yVal), eval(df))
-  
+  #linear model fit
   mod_lin <- nlsLM(var_name_y ~ lin_func(var_name_x, a1, b1), 
                    start=list(a1=1, b1=10))
+  #quadratic model fit
   mod_quad <- nlsLM(var_name_y ~ quad_func(var_name_x, a1, b1, c1), 
                     start=list(a1=1, b1=1, c1=1))
+  #cubic model fit
   mod_cubic <- nlsLM(var_name_y ~ cubic_func(var_name_x, a1, b1, c1, d1), 
                      start=list(a1=1, b1=1, c1=1, d1=1))
+  #exponential model fit
   mod_exp <- nlsLM(var_name_y ~ exp_func(var_name_x, a1, b1, c1), 
                    start=list(a1=1, b1=0, c1=1))
-  
+  #plot data without models
   data_plot <- ggplot(df, aes(x = var_name_x, y = var_name_y, color = Sex)) + 
     geom_point() +
     theme_minimal() +
@@ -369,23 +399,33 @@ make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, u
          x=paste(varNameX, unitX), y=paste(varNameY, unitY)) + 
     theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
         axis.text.x = element_text(angle = 90, vjust = 0.5)) 
-  
+  #manually add each line for a model
   plot_models <- data_plot + geom_line(aes(x=var_name_x, y=predict(mod_lin)), color="red") + 
     geom_line(aes(x=var_name_x, y=predict(mod_quad)), color="orange") +
     geom_line(aes(x=var_name_x, y=predict(mod_cubic)), color="green") +
     geom_line(aes(x=var_name_x, y=predict(mod_exp)), color="blue")
-  
+  #calculate the anova results
   anova_res1exp <- anova(mod_lin, mod_exp) 
   anova_res123 <- anova(mod_lin, mod_quad, mod_cubic) 
-  
-  # chisquare_list <- c(calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4))
-  # chisquare_list <- as.numeric(chisquare_list)
-  
+  #return the plot with model lines, the anova results, and chisquare/dof statistic for each model
   return(list(plot_models, anova_res1exp, anova_res123, calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4)))
 }
+#output will be in a nested list
+#for example you would do the following to call the results:
+# results <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+# and to call the plot results you would write
+# plot <- results[[1]]
+# anova_linear_exponential <- results[[2]]
+# anova_lin_quad_cubic <- results[[3]]
+# chisquare_exponential <- results[[4]]
+# chisquare_linear <- results[[5]]
+# chisquare_quadratic <- results[[6]]
+# chisquare_cubic <- results[[7]]
 ```
 
-```{r, results='markup'}
+```{r func6, results='markup'}
+#function to combine the anove results with the model list
+#same idea as the chisquare function earlier
 combine_anova <- function(anova_results, model_list) {
   anova_res <- cbind("Models"=model_list, anova_results)
   return(anova_res)
