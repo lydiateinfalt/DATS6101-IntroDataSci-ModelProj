@@ -229,7 +229,7 @@ anova_res123 %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-```{r func2}
+```{r func5}
 #makes a dataframe from two lists, where the first list should be the models and the second list should be the chisquare/dof statistic
 make_df <- function(list1, list2) {
   # first list should be model list
@@ -372,7 +372,7 @@ make_plots(swimming, "Swimming", "Years", "Average Height", Year, mean.Height, "
 
 ### Female Athletes
 
-```{r func5, results='markup'}
+```{r func6, results='markup'}
 #make plots with the model fits
 #to use the function write something like the following:
 #make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
@@ -423,7 +423,7 @@ make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, u
 # chisquare_cubic <- results[[7]]
 ```
 
-```{r func6, results='markup'}
+```{r func7, results='markup'}
 #function to combine the anove results with the model list
 #same idea as the chisquare function earlier
 combine_anova <- function(anova_results, model_list) {
