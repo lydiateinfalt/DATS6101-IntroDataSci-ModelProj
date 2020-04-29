@@ -57,7 +57,13 @@ olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
 head(olympic_data)
 str(olympic_data)
 ```
-
-
+# Introduction
+# EDA
+# Clustering, Kmeans, Kmedoids 
+# KNN, Logit Regression
+# Random Forest
+# Pandemic (Spanish Flu)
+# Trends over time
+# Summary and Conclusion
 # References
 
