@@ -68,16 +68,52 @@ We used a dataset called `120 years of Olympic history: athletes and results` on
 The report is organized as follows:
 
 1. Summary of Dataset
-2. Description of Data
-3. Data Prep
-4. EDA
-5. GDP Data Goes Here?
-6. Are there any common names among Olympians? (Name Data)
-7. Have there been any body trends among Olympians over the years? (Trends Over Time)
-8. Are Olympic Athletes a certain age? (Age Data)
-9. Discussion And Conclusion
+2. Data Prep
+3. EDA
+4. Clustering, Kmeans, Kmedoids 
+5. Linear and Logit Regression
+6. Random Forest
+7. Pandemic (Spanish Flu)
+8. Trends over time
+9. Summary and Conclusion
+10. References
 
-# Data Prep
+# Summary of Dataset
+The data looks like the following:
+
+```{r input_data}
+athlete_events <- data.frame(read.csv("athlete_events.csv"))
+#noc_regions <- data.frame(read.csv("noc_regions.csv"))
+#summary(athlete_events)
+str(athlete_events)
+```
+
+The athlete events data has `r ncol(athlete_events)` columns and `r nrow(athlete_events)` rows/entries, for a total of `r ncol(athlete_events)*nrow(athlete_events)` individual data points. In `athelete_events` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
+
+1. ID: Unique number for each athlete
+2. Name: Athlete's name
+3. Sex: M or F
+4. Age: Integer
+5. Height: centimeters
+6. Weight: kilograms
+7. Team: Team name
+8. NOC: National Olympic Committee 3-letter code
+9. Games: Year and season
+10. Year: Integer
+11. Season: Summer or Winter
+12. City: Host city
+13. Sport
+14. Event
+15. Medal: Gold, Silver, Bronze, or NA
+
+To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. 
+
+```{r remove_NAs}
+athlete_events_noNA <- na.omit(athlete_events)
+data_sport <- split(athlete_events_noNA, athlete_events_noNA$Sport)
+```
+
+
 # EDA
 # Clustering, Kmeans, Kmedoids 
 # Logit Regression
