@@ -50,20 +50,13 @@ opts_chunk$set(echo=FALSE,
 opts_knit$set(width=75)
 ```
 
-```{r import_data}
-olympic_data <- data.frame(read.csv("olympic_data.csv"))
-olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
-olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
-head(olympic_data)
-str(olympic_data)
-```
 
 # Introduction
-Team 010100 are the following members: Obumneke Amadi, Izzy Illari, Lucia Illari, Omar Qusous, and Lydia Teinfalt. You may find our work over on [GitHub](https://github.com/IzzyIllari/DATS-Model-Proj).
+Team 010100 are the following members: Izzy Illari, Lucia Illari, Omar Qusous, and Lydia Teinfalt. You may find our work over on [GitHub](https://github.com/IzzyIllari/DATS-Model-Proj).
 
-For the second portion of our group project, we kept Olympics data from the EDA. Our SMART questions were `What groups/clusters do athletes of different sports fall into?` What factors can be used to model the probability of being awarded a medal? How does a pandemic affect the medals awarded? How can the evolution of athlete characteristics over time be modelled? With these questions in mind we went to see if we could find use the data on Olympians to find patterns and create models that could answer the questions.
+For the second portion of our group project, we kept Olympics data from the EDA. Our SMART questions were `What factors can be used to model the probability of being awarded a medal?` What groups/clusters do athletes of different sports fall into? How does a pandemic affect the medals awarded? How can the evolution of athlete characteristics over time be modelled? With these questions in mind we went to see if we could find use the data on Olympians to find patterns and create models that could answer the questions.
 
-We used a dataset called `120 years of Olympic history: athletes and results` on Kaggle over here: [https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results). This historical dataset includes all Olympic Games from Athens 1896 to Rio 2016, which was scraped from [https://www.sports-reference.com/](https://www.sports-reference.com/). Except for the analysis of the H1N1 pandemic aka Spanish Flu, we focused on data from Olympic events 1960-2016.  
+We used a dataset called `120 years of Olympic history: athletes and results` on Kaggle over here: [https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results). This historical dataset includes all Olympic Games from Athens 1896 to Rio 2016, which was scraped from [https://www.sports-reference.com/](https://www.sports-reference.com/). We focused on data from Olympic events 1960-2016 when looking at clustering, Kmeans, Linear and Logit Regression and trends over time. For the pandemic analysis, we focused on data of Olympics participating in events before and after the H1N1 Pandemic from 1918-1919.   
 
 The report is organized as follows:
 
@@ -81,14 +74,17 @@ The report is organized as follows:
 # Summary of Dataset
 The data looks like the following:
 
-```{r input_data}
-athlete_events <- data.frame(read.csv("athlete_events.csv"))
-#noc_regions <- data.frame(read.csv("noc_regions.csv"))
-#summary(athlete_events)
-str(athlete_events)
+
+```{r import_data}
+olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
+olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
+#head(olympic_data)
+str(olympic_data)
 ```
 
-The athlete events data has `r ncol(athlete_events)` columns and `r nrow(athlete_events)` rows/entries, for a total of `r ncol(athlete_events)*nrow(athlete_events)` individual data points. In `athelete_events` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
+
+The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_data)` rows/entries, for a total of `r ncol(olympic_data)*nrow(olympic_data)` individual data points. In `olympic_data` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
 
 1. ID: Unique number for each athlete
 2. Name: Athlete's name
