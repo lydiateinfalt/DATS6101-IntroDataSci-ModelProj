@@ -105,17 +105,193 @@ The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_d
 To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. 
 
 ```{r remove_NAs}
-athlete_events_noNA <- na.omit(athlete_events)
-data_sport <- split(athlete_events_noNA, athlete_events_noNA$Sport)
+olympic_data_noNA <- na.omit(olympic_data)
+olympic_data <- olympic_data_noNA
+data_sport <- split(olympic_data_noNA, olympic_data_noNA$Sport)
 ```
 
 
 # EDA
+```{r keep, results = "markup"}
+
+olympic_data$Sex.Int <- c(as.numeric(as.factor(olympic_data$Sex)))
+olympic_data$NOC.Int <- c(as.numeric(as.factor(olympic_data$NOC)))
+olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
+
+```
+
+
+#Olympics Correlation plot
+
+```{r data_subset}
+loadPkg("dplyr")
+
+olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
+
+
+unloadPkg("dplyr")
+```
+
+
+
 # Clustering, Kmeans, Kmedoids 
 # Logit Regression
 # KNN
 # Random Forest
 # Pandemic (Spanish Flu)
+The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which  was 0.8 percent of the 1910 population. 
+
+```{r loadpackages}
+loadPkg("digest")
+loadPkg("corrplot")
+loadPkg("ggcorrplot")
+loadPkg("ggplot2")
+loadPkg("rmdformats")
+loadPkg("knitr")
+loadPkg("lattice") 
+loadPkg("jtools")
+loadPkg("faraway")
+loadPkg("leaps")
+loadPkg("gridExtra")
+```
+
+```{r read_pandemic_data}
+
+p_olympics <- read.csv("pandemic_olympics.csv")
+```
+(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.)
+
+```{r H1N1_pandemic}
+loadPkg("dplyr")
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+Medals <- c("Gold", "Silver", "Bronze")
+
+pandemic_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         Medal %in% Medals) %>% group_by(NOC, Year) %>% tally()
+
+pandemic_NOC_Yr_Mdl$Year <- as.factor(pandemic_NOC_Yr_Mdl$Year)
+unloadPkg("dplyr")
+
+```
+
+
+```{r plots_num_medals , include=TRUE}
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+
+pandemic_df <- data.frame(pandemic_NOC_Yr_Mdl$NOC, pandemic_NOC_Yr_Mdl$Year, pandemic_NOC_Yr_Mdl$n)
+pandemic_df <- unique(pandemic_df)
+colnames(pandemic_df) <- c("NOC", "Year", "Total.Medals")
+
+pandemic_df$NOC <- as.factor(pandemic_df$NOC)
+
+
+
+# Basic line plot with points
+ggplot(data=pandemic_df, aes(x=Year, y=Total.Medals, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of medals (n) vs. Year (1908-1928)", x="Year", y="Number of medals (n)") 
+
+
+```
+
+```{r plots_num_athletes, include=TRUE}
+loadPkg("dplyr")
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+
+p_num_athletes <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF) %>% group_by(NOC, Year) %>% tally(ID)
+
+
+p_num_athletes_df <- data.frame(p_num_athletes$NOC, p_num_athletes$Year, p_num_athletes$n)
+p_num_athletes_df <- unique(p_num_athletes_df)
+colnames(p_num_athletes_df) <- c("NOC", "Year", "Total.Athletes")
+p_num_athletes_df$NOC <- as.factor(p_num_athletes_df$NOC)
+p_num_athletes_df$Year <- as.factor(p_num_athletes_df$Year)
+p_num_athletes_df$V_line <- c("1918") 
+
+
+# Basic line plot with points
+ggplot(data=p_num_athletes_df, aes(x=Year, y=Total.Athletes, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of athletes (n) vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+  
+unloadPkg("dplyr")
+```
+
+
+```{r ageSF}
+loadPkg(dplyr)
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+pandemic_avg_age <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         !is.na(Age)) %>% group_by(NOC, Year) %>% summarise(avg=mean(Age))
+
+pandemic_avg_age$Year <- as.factor(pandemic_avg_age$Year)
+
+
+# Basic line plot with points
+ggplot(data=pandemic_avg_age, aes(x=Year, y=avg, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Age vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+```
+
+
+```{r w_h}
+pandemic_avg_hw<- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                        !is.na(Height),
+                                         !is.na(Weight)) %>% group_by(NOC, Year) %>% summarise(avg_h = mean(Height), avg_w = mean(Weight))
+pandemic_avg_hw$Year <- as.factor(pandemic_avg_hw$Year)
+
+
+# Basic line plot with points
+h1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_h, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Height vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+h1
+
+w1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_w, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Weight vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+w1
+
+```
+
 # Trends over time
 # Summary and Conclusion
 # References
