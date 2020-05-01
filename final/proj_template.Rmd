@@ -59,6 +59,24 @@ str(olympic_data)
 ```
 
 # Introduction
+Team 010100 are the following members: Obumneke Amadi, Izzy Illari, Lucia Illari, Omar Qusous, and Lydia Teinfalt. You may find our work over on [GitHub](https://github.com/IzzyIllari/DATS-Model-Proj).
+
+For the second portion of our group project, we kept Olympics data from the EDA. Our SMART questions were `What groups/clusters do athletes of different sports fall into?` What factors can be used to model the probability of being awarded a medal? How does a pandemic affect the medals awarded? How can the evolution of athlete characteristics over time be modelled? With these questions in mind we went to see if we could find use the data on Olympians to find patterns and create models that could answer the questions.
+
+We used a dataset called `120 years of Olympic history: athletes and results` on Kaggle over here: [https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results). This historical dataset includes all Olympic Games from Athens 1896 to Rio 2016, which was scraped from [https://www.sports-reference.com/](https://www.sports-reference.com/). Except for the analysis of the H1N1 pandemic aka Spanish Flu, we focused on data from Olympic events 1960-2016.  
+
+The report is organized as follows:
+
+1. Summary of Dataset
+2. Description of Data
+3. Data Prep
+4. EDA
+5. GDP Data Goes Here?
+6. Are there any common names among Olympians? (Name Data)
+7. Have there been any body trends among Olympians over the years? (Trends Over Time)
+8. Are Olympic Athletes a certain age? (Age Data)
+9. Discussion And Conclusion
+
 # Data Prep
 # EDA
 # Clustering, Kmeans, Kmedoids 
