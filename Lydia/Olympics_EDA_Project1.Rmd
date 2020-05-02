@@ -469,6 +469,7 @@ fit.spline <- tslm(olympic_all ~ t + I(t^2) + I(t^3) +
   I(tb1^3) + I(tb2^3))
 fcasts.spl <- forecast(fit.spline, newdata = newdata)
 
+
 autoplot(olympic_all) +
   autolayer(fitted(fit.lin), series = "Linear") +
   autolayer(fitted(fit.exp), series = "Exponential") +
@@ -484,67 +485,13 @@ autoplot(olympic_all) +
 
 ```
 
-```{r func1}
-# linear model function, it takes 3 inputs
-lin_func <- function(x, a, b) {
-  a*x+b
-}
-# quadratic model function, it takes 4 inputs
-quad_func <- function(x, a, b, c) {
-  a*x*x + b*x + c
-}
-# cubic model function, it takes 5 inputs
-cubic_func <- function(x, a, b, c, d) {
-  a*x*x*x + b*x*x + c*x + d 
-}
-# exponential model function, it takes 4 inputs
-exp_func <- function(x, a, b, c) {
-  a*exp(b*x) + c
-}
-```
-
-
-```{r}
-loadPkg("tidyverse")
-loadPkg("minpack.lm")
-xdata <- olympics_total_medals$Year
-ydata <- olympics_total_medals$n
-
-mod_lin <- nlsLM(ydata~lin_func(xdata, a1, b1), start=list(a1=1, b1=20))
-mod_quad <- nlsLM(ydata~quad_func(xdata, a1, b1, c1), start=list(a1=1, b1=1, c1=1))
-mod_cubic <- nlsLM(ydata~cubic_func(xdata, a1, b1, c1, d1), start=list(a1=1, b1=1, c1=1, d1=1))
-mod_exp <- nlsLM(ydata~exp_func(xdata, a1, b1, c1), start=list(a1=1, b1=0, c1=1))
-data_plot <- ggplot(olympics_total_medals, aes(x = Year, y=n)) + 
-  geom_point() + 
-  ylim(0, 80) + xlim(1960, 2020) +
-  theme_minimal() +
-  labs(title="Plot of the number of Medals at the Olympic Game over the years \n starting from 1948", x="Year", y="Number of Medals") + 
-  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
-        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
-data_plot + geom_line(aes(x=xdata, y=predict(mod_lin)), color="red") + 
-  geom_line(aes(x=xdata, y=predict(mod_quad)), color="orange") +
-  geom_line(aes(x=xdata, y=predict(mod_cubic)), color="green") +
-  geom_line(aes(x=xdata, y=predict(mod_exp)), color="blue")
-model_list_1exp <- c("Linear", "Exponential")
-model_list_123 <- c("Linear", "Quadratic", "Cubic")
-anova_results1exp <- anova(mod_lin, mod_exp)
-anova_results123 <- anova(mod_lin, mod_quad, mod_cubic) 
-anova_res1exp <- cbind("Models"=model_list_1exp, anova_results1exp)
-anova_res123 <- cbind("Models"=model_list_123, anova_results123)
-anova_res1exp %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover"))
-anova_res123 %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover"))
-```
 
 
 ```{r arima}
 olympic_arima<- auto.arima(olympic_all, seasonal=FALSE)
 summary(olympic_arima)
 
-olympic_arima %>% forecast(h=10) %>% autoplot(include=80)
+olympic_arima %>% forecast(h=10) %>% autoplot(include=8)
 
 ```
 ## Linear Model
@@ -568,14 +515,7 @@ unloadPkg("dplyr")
 
 
 
-```{r hist_tmedals}
-plot(new_data$TMedals)
-hist(new_data$TMedals, main="Histogram of TotalMedals", col = 'blue', xlab = "Total Medals") 
-
-```
-
-
-## Linear Model1 TMedals ~ BMI
+### Linear Model1 TMedals ~ BMI
 ```{r linear_model, results="markup"}
 model1 = dyn$lm(TMedals ~ BMI, data=new_data)
 sum_md1 = summary(model1)
@@ -594,7 +534,7 @@ xkabledply(sum_md1, "Linear model summary", "center")
 xkablevif(model1)
 ```
 
-## Linear Model2 TMedals ~ Age
+### Linear Model2 TMedals ~ Age
 ```{r model2}
 
 model2 = dyn$lm(TMedals ~ Age, data=new_data)
@@ -615,7 +555,7 @@ xkabledply(sum_md2, "Linear model2 summary", "center")
 xkablevif(model2)
 ```
 
-## Linear Model 3 TMedals ~ BMI + Age
+### Linear Model 3 TMedals ~ BMI + Age
 ```{r model3}
 model3 = dyn$lm(TMedals ~ BMI + Age , data=new_data)
 sum_md3 = summary(model3)
@@ -628,7 +568,7 @@ xkabledply(sum_md3, "Linear model3 summary", "center")
 xkablevif(model3)
 ```
 
-## Linear Model 4 TMedals ~ BMI + Age + GDP
+### Linear Model 4 TMedals ~ BMI + Age + GDP
 ```{r model4}
 model4 = dyn$lm(TMedals ~ BMI + Age + GDP , data=new_data)
 sum_md4 = summary(model4)
@@ -671,3 +611,97 @@ anova_m
 summary(anova_m)
 
 ```
+
+# Logit Regression: Factors influencing Earning Olympic Medals
+```{r corr1}
+loadPkg("dplyr")
+
+new_data1 <- olympics  %>% group_by(Year) %>% add_count(Medal, name="TMedals")
+
+keep_columns <- c( "NOC", "Year", "Decade", "Sex", "Age", "Height", "Weight", "BMI", "Population", "GDP", "Medal.No.Yes", "TMedals")
+
+
+new_data_subset <- new_data1[keep_columns]
+new_data_subset <- new_data_subset %>% filter(!is.na(Age))
+```
+
+```{r pairs_logit, eval=FALSE}
+loadPkg(psych) # pair plots with histogram on diagonal and other options
+pairs.panels(new_data_subset , 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = FALSE,  # show density plots
+             ellipses = FALSE # show correlation ellipses
+             )
+unloadPkg(psych)
+
+```
+
+```{r ggplot}
+loadPkg(ggplot2)
+new_data_subset$Medal.No.Yes=as.factor(new_data_subset$Medal.No.Yes)
+
+ggplot(new_data_subset, aes(Age, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(new_data_subset, aes(BMI, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(new_data_subset, aes(Sex, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+
+```
+
+```{r logit}
+
+olympic_logit <- glm(Medal.No.Yes ~ BMI + Age + Sex, data = new_data_subset, binomial(link = "logit"))
+summary(olympic_logit)
+exp(coef(olympic_logit))
+
+
+
+## CIs using standard errors
+confint.default(olympic_logit)
+```
+
+
+```{r HosmerLemeshow, eval=FALSE}
+
+loadPkg("ResourceSelection") # function hoslem.test( ) for logit model evaluation
+olympic_logit1_Hoslem = hoslem.test(new_data_subset$Medal.No.Yes, fitted(olympic_logit)) # Hosmer and Lemeshow test, a chi-squared test
+unloadPkg("ResourceSelection") 
+olympic_logit1_Hoslem
+
+```
+
+
+
+```{r AUC}
+loadPkg("pROC") 
+test_prob = predict(olympic_logit, newdata = new_data_subset, type = "response")
+test_roc = roc(Medal.No.Yes~test_prob, data=new_data_subset, plot = TRUE, print.auc = TRUE)
+
+unloadPkg("pROC")
+```
+
+```{r confusion}
+loadPkg("regclass")
+olympic_logit_confusion = confusion_matrix(olympic_logit)
+unloadPkg("regclass")
+```
+```{r, results="asis"}
+xkabledply(olympic_logit_confusion,"Confusion Matrix: Logit model 2, cutoff = 0.5")
+```
+
+```{r McFadden}
+olympic_nulllogit2 <- glm(Medal.No.Yes ~ 1, data = new_data_subset, family = "binomial")
+mcFadden = 1 - logLik(olympic_logit)/logLik(olympic_nulllogit2)
+```
+
+```{r McFadden1}
+loadPkg("pscl") # use pR2( ) function to calculate McFadden statistics for model eval
+olympicLogit1pr2 = pR2(olympic_logit)
+olympicLogit1pr2
+unloadPkg("pscl") 
+```
+
+
+The McFadden (part of the pseudo-R$^2$ statistics) value of `r round(olympicLogit1pr2['McFadden'], digits=3)` also shows the model is not a particularly great model, with only `r round(olympicLogit1pr2['McFadden']*100, digits=1)`% of the variation explained. 
