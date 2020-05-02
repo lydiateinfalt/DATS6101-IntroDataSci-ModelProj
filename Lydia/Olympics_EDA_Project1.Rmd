@@ -361,6 +361,11 @@ olympics_total_medals <- olympics %>% filter(Medal %in% Medals, Season == "Summe
 group_by(NOC, Year) %>% tally(Medal.No.Yes)
 #olympics_total_medals
 
+olympics_summer_medals <- olympics %>% filter(Medal %in% Medals, Season == "Summer") %>%
+group_by(Year) %>% tally(Medal.No.Yes)
+colnames(olympics_summer_medals) <- c("Year", "Medals")
+olympics_summer_medals$Year <- as.factor(olympics_summer_medals$Year)
+
 
 
 ITA_Tmedals <- pandemic_total_medals %>% filter(NOC == "ITA")  
@@ -371,8 +376,9 @@ ITA_Tmedals_all <- olympics_total_medals  %>% filter(NOC == "ITA")
 
 #histogram of Number of Medals
 loadPkg("ggplot2")
-ggplot(olympics_total_medals, aes(x=Year))  + geom_histogram(color="gray7", aes(y=..density..)) + ylab("Relative Frequency") 
-#unloadPkg("ggplot2")
+ggplot(data=olympics_summer_medals, aes(x=Year, y=Medals)) +
+  geom_bar(stat="identity", fill="steelblue")+ylab("Total Number of Medals") + theme_minimal()
+
 unloadPkg("dplyr")
 ```
 
@@ -403,6 +409,7 @@ olympic_train <- window(ol_ts, start=1908, end = 1928, deltat=4)
 olympic_test <- window(ol_ts, start=2012, end = 2016, deltat=4)
 
 ```
+
 ```{r forecast1}
 
 olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
@@ -502,6 +509,7 @@ loadPkg("tidyverse")
 loadPkg("minpack.lm")
 xdata <- olympics_total_medals$Year
 ydata <- olympics_total_medals$n
+
 mod_lin <- nlsLM(ydata~lin_func(xdata, a1, b1), start=list(a1=1, b1=20))
 mod_quad <- nlsLM(ydata~quad_func(xdata, a1, b1, c1), start=list(a1=1, b1=1, c1=1))
 mod_cubic <- nlsLM(ydata~cubic_func(xdata, a1, b1, c1, d1), start=list(a1=1, b1=1, c1=1, d1=1))
