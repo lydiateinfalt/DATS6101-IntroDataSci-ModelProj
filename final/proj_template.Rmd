@@ -102,7 +102,18 @@ The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_d
 14. Event
 15. Medal: Gold, Silver, Bronze, or NA
 
-To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. 
+To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. We have modified the data from the kaggle dataset from which it was originally taken. The dataset now starts at 1960 and includes the new following variables:
+
+1. Decade (factor)
+2. First name (factor)
+3. Last name (factor)
+4. BMI (numeric)
+5. BMI category (factor)
+6. Population (numeric)
+7. GDP (numeric)
+8. GDPpC (numeric)
+9. Medal: Yes or No (factor)
+
 
 ```{r remove_NAs}
 olympic_data_noNA <- na.omit(olympic_data)
