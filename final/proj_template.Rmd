@@ -74,9 +74,49 @@ The report is organized as follows:
 # Summary of Dataset
 The data looks like the following:
 
+```{r xkablesummary, include = FALSE}
+loadPkg(xtable)
+loadPkg(kableExtra)
+loadPkg(stringi)
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+```
 
 ```{r import_data}
 olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$ID <- as.factor(olympic_data$ID)
 olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
 olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
 #head(olympic_data)
@@ -115,7 +155,13 @@ To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs wer
 9. Medal: Yes or No (factor)
 
 
-```{r remove_NAs}
+```{r remove_NAs, echo = FALSE}
+olympic.data <- olympic_data
+
+loadPkg(VIM)
+aggr(olympic.data)
+unloadPkg(VIM)
+
 olympic_data_noNA <- na.omit(olympic_data)
 olympic_data <- olympic_data_noNA
 data_sport <- split(olympic_data_noNA, olympic_data_noNA$Sport)
@@ -123,27 +169,65 @@ data_sport <- split(olympic_data_noNA, olympic_data_noNA$Sport)
 
 
 # EDA
+
+For EDA, we can do a quick summary to just look at the data.
+
 ```{r keep, results = "markup"}
+xkablesummary(olympic_data)
+
+# loadPkg(psych)
+# pairs.panels(olympic_data[,-length(olympic_data)], 
+#              method = "pearson",
+#              hist.col = "#CCFF66",
+#              density = TRUE,
+#              ellipses = TRUE
+#              )
+# unloadPkg(psych)
 
 olympic_data$Sex.Int <- c(as.numeric(as.factor(olympic_data$Sex)))
 olympic_data$NOC.Int <- c(as.numeric(as.factor(olympic_data$NOC)))
 olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
-
 ```
-
 
 #Olympics Correlation plot
 
-```{r data_subset}
+Just quickly visualizing thw correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are noturally going to be highly correlated.
+
+```{r subset_corr, echo = FALSE}
 loadPkg("dplyr")
-
 olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
-
-
 unloadPkg("dplyr")
+
+loadPkg("corrplot")
+cols.num <- c(1:length(olympic.data))
+num.df <- olympic.data
+num.df[cols.num] <- sapply(olympic.data[cols.num],as.numeric)
+cor.all <- cor(num.df[,c(1,2,8:13,15:17,24)], use="pairwise.complete.obs")
+cmat.all <- corrplot(cor.all, method="pie", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+unloadPkg("corrplot")
 ```
 
+It might be more useful to focus in on the correlations for only the variable Medal.No.Yes and Medal:
 
+```{r focus_corr, results = "markup"}
+loadPkg(corrr)
+loadPkg(plyr)
+
+cor.medNY <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal.No.Yes)
+cor.medNY[order(cor.medNY$Medal.No.Yes, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+cor.medal <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal)
+cor.medal[order(cor.medal$Medal, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+unloadPkg(corrr)
+unloadPkg(plyr)
+```
+
+Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off teh strength of the correlations.
 
 # Clustering, Kmeans, Kmedoids 
 # Logit Regression
