@@ -153,14 +153,14 @@ unloadPkg("dplyr")
 
 
 ```{r pairs_logit1}
-#loadPkg(psych) # pair plots with histogram on diagonal and other options
-#pairs.panels(olympics_subset, 
-#             method = "pearson", # correlation method
-#             hist.col = "#00AFBB",
-#             density = FALSE,  # show density plots
-#             ellipses = FALSE # show correlation ellipses
-#             )
-#unloadPkg(psych)
+loadPkg(psych) # pair plots with histogram on diagonal and other options
+pairs.panels(olympics_subset, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = FALSE,  # show density plots
+             ellipses = FALSE # show correlation ellipses
+             )
+unloadPkg(psych)
 ```
 
 ```{r}
@@ -539,38 +539,42 @@ summary(olympic_arima)
 olympic_arima %>% forecast(h=10) %>% autoplot(include=80)
 
 ```
-
 ## Linear Model
 #Create New_data Adding Total Number of Medals
 ```{r}
 loadPkg("dplyr")
-new_data <- olympics %>% filter(Medal.No.Yes == "1") %>% group_by(Year) %>% add_count(Medal, name="TMedals")
+loadPkg("kableExtra")
+loadPkg("jtools")
+loadPkg("dyn")
 
+new_data <- olympics %>% filter(Medal.No.Yes == "1") %>% group_by(Year) %>% add_tally(Medal.No.Yes, name="TMedals")
+
+keep_columns <- c( "NOC", "Year", "Decade", "Sex", "Age", "Height", "Weight", "BMI", "Population", "GDP", "Medal.No.Yes", "TMedals")
+new_data <- na.omit(new_data)
+
+new_data_subset <- new_data[keep_columns]
+new_data_subset <- new_data_subset %>% filter(!is.na(Age))
 
 unloadPkg("dplyr")
-
 ```
 
-```{r, results='asis'}
-xkablesummary(new_data)
-```
 
-#Create Correlation Plot with New_data
-```{r corr}
-loadPkg("GGally")
-ggcorr(new_data, label= TRUE, label_alpha = TRUE)
-unloadPkg("GGally")
+
+```{r hist_tmedals}
+plot(new_data$TMedals)
+hist(new_data$TMedals, main="Histogram of TotalMedals", col = 'blue', xlab = "Total Medals") 
+
 ```
 
 
 ## Linear Model1 TMedals ~ BMI
 ```{r linear_model, results="markup"}
-model1 = lm(TMedals ~ BMI, data=new_data)
+model1 = dyn$lm(TMedals ~ BMI, data=new_data)
 sum_md1 = summary(model1)
 sum_md1
 
-```
 
+```
 ```{r vif_md1}
 
 vif_md1 = faraway::vif(model1)
@@ -584,7 +588,8 @@ xkablevif(model1)
 
 ## Linear Model2 TMedals ~ Age
 ```{r model2}
-model2 = lm(TMedals ~ Age, data=new_data)
+
+model2 = dyn$lm(TMedals ~ Age, data=new_data)
 sum_md2 = summary(model2)
 sum_md2
 ```
@@ -604,7 +609,7 @@ xkablevif(model2)
 
 ## Linear Model 3 TMedals ~ BMI + Age
 ```{r model3}
-model3 = lm(TMedals ~ BMI + Age , data=new_data)
+model3 = dyn$lm(TMedals ~ BMI + Age , data=new_data)
 sum_md3 = summary(model3)
 sum_md3
 ```
@@ -617,7 +622,7 @@ xkablevif(model3)
 
 ## Linear Model 4 TMedals ~ BMI + Age + GDP
 ```{r model4}
-model4 = lm(TMedals ~ BMI + Age + GDP , data=new_data)
+model4 = dyn$lm(TMedals ~ BMI + Age + GDP , data=new_data)
 sum_md4 = summary(model4)
 sum_md4
 
@@ -629,9 +634,8 @@ xkabledply(sum_md4, "Linear model4 summary", "center")
 xkablevif(model4)
 ```
 
-```{r q04_summary, echo=TRUE}
-loadPkg(kableExtra)
-loadPkg(jtools)
+```{r summary_linear_models}
+
 
 model_names <- c("Linear Model 1: TMedals ~ BMI", "Linear Model 2: TMedals ~ Age", "Linear Model 3: TMedals ~ BMI + Age", "Linear Model 4: TMedals ~ BMI + Age+ GDP")
 m <- c(summary(model1))
@@ -652,90 +656,10 @@ vtable<-  kable(vdf) %>% kable_styling
 ```
 
 ```{r anova}
-#anova_m <- anova(model1, model2, model3, model4)
-#summary(anova_m)
-```
-
-```{r corr1}
-
-new_data1 <- olympics  %>% group_by(Year) %>% add_count(Medal, name="TMedals")
-
-keep_columns <- c( "NOC", "Year", "Decade", "Sex", "Age", "Height", "Weight", "BMI", "Population", "GDP", "Medal.No.Yes", "TMedals")
 
 
-new_data_subset <- new_data1[keep_columns]
-new_data_subset <- new_data_subset %>% filter(!is.na(Age))
-```
-```{r pairs_logit}
-loadPkg(psych) # pair plots with histogram on diagonal and other options
-pairs.panels(new_data_subset , 
-             method = "pearson", # correlation method
-             hist.col = "#00AFBB",
-             density = FALSE,  # show density plots
-             ellipses = FALSE # show correlation ellipses
-             )
-unloadPkg(psych)
-
-```
-```{r ggplot}
-loadPkg(ggplot2)
-new_data_subset$Medal.No.Yes=as.factor(new_data_subset$Medal.No.Yes)
-
-
-ggplot(new_data_subset, aes(Age, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
-
-ggplot(new_data_subset, aes(BMI, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
-
-```
-
-```{r logit}
-
-olympic_logit <- glm(Medal.No.Yes ~ Age + Height+ Weight, data = new_data_subset, binomial(link = "logit"))
-summary(olympic_logit)
-exp(coef(olympic_logit))
-
-
-
-## CIs using standard errors
-confint.default(olympic_logit)
-```
-
-
-
-
-
-
-```{r HosmerLemeshow, eval=FALSE}
-#### Hosmer and Lemeshow test  
-########The Hosmer and Lemeshow Goodness of Fit test can be used to evaluate logistic regression fit. 
-
-loadPkg(ResourceSelection) # function hoslem.test( ) for logit model evaluation
-olympic_logit1_Hoslem = hoslem.test(new_data_subset$Medal.No.Yes, fitted(olympic_logit)) # Hosmer and Lemeshow test, a chi-squared test
-unloadPkg(ResourceSelection) 
-olympic_logit1_Hoslem
-
-```
-
-```{r AUC}
-
-loadPkg(pROC) # receiver operating characteristic curve, gives the diagnostic ability of a binary classifier system as its discrimination threshold is varied. The curve is on sensitivity/recall/true-positive-rate vs false_alarm/false-positive-rate/fall-out.
-new_data_subset$prob=predict(olympic_logit, type = c("response")) # Add new column of predicted probabilities
-h <- roc(Medal.No.Yes~prob, data=new_data_subset)
-auc(h) # area-under-curve prefer 0.8 or higher.
-plot(h)
-
-
-```
-```{r confusion}
-loadPkg(regclass)
-olympic_logit_confusion = confusion_matrix(olympic_logit)
-unloadPkg(regclass)
-```
-
-```{r McFadden}
-olympic_nulllogit2 <- glm(Medal.No.Yes ~ 1, data = new_data_subset, family = "binomial")
-mcFadden = 1 - logLik(olympic_logit)/logLik(olympic_nulllogit2)
-mcFadden
-
+anova_m <- anova(model1, model2, model3, model4)
+anova_m
+summary(anova_m)
 
 ```
