@@ -189,7 +189,7 @@ olympic_data$NOC.Int <- c(as.numeric(as.factor(olympic_data$NOC)))
 olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
 ```
 
-#Olympics Correlation plot
+# Olympics Correlation plot
 
 Just quickly visualizing thw correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are noturally going to be highly correlated.
 
@@ -227,27 +227,27 @@ unloadPkg(corrr)
 unloadPkg(plyr)
 ```
 
-Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off teh strength of the correlations.
+Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off the strength of the correlations.
 
 # Clustering, Kmeans, Kmedoids 
 # Logit Regression
 # KNN
 # Random Forest
 # Pandemic (Spanish Flu)
-The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which  was 0.8 percent of the 1910 population. 
+With the novel corona virus pandemic this year and its delay of the Olympics in Tokyo this year, we thought it would be interesting to study a last pandemic in the last century and analyze the impact it had on the Olympic performance. The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which was 0.8 percent of the 1910 population. 
 
 ```{r loadpackages}
-loadPkg("digest")
-loadPkg("corrplot")
-loadPkg("ggcorrplot")
-loadPkg("ggplot2")
-loadPkg("rmdformats")
-loadPkg("knitr")
-loadPkg("lattice") 
-loadPkg("jtools")
-loadPkg("faraway")
-loadPkg("leaps")
-loadPkg("gridExtra")
+loadPkg(digest)
+loadPkg(corrplot)
+loadPkg(ggcorrplot)
+loadPkg(ggplot2)
+loadPkg(rmdformats)
+loadPkg(knitr)
+loadPkg(lattice) 
+loadPkg(jtools)
+loadPkg(faraway)
+loadPkg(leaps)
+loadPkg(gridExtra)
 ```
 
 ```{r read_pandemic_data}
@@ -255,8 +255,10 @@ p_olympics <- read.csv("pandemic_olympics.csv")
 ```
 (JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.)
 
+Of the European countries that suffered significant excess deaths during the Spanish Influenza Pandemic, these countries competed before and after 1918-1919: Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA). We created a separate pandemic data set containing athletes from these countries that competed in the Olympics between 1908-1928 to study before and after the pandemic. 
+
 ```{r H1N1_pandemic}
-loadPkg("dplyr")
+loadPkg(dplyr)
 NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
 Medals <- c("Gold", "Silver", "Bronze")
 
@@ -265,11 +267,11 @@ pandemic_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
                                          Medal %in% Medals) %>% group_by(NOC, Year) %>% tally()
 
 pandemic_NOC_Yr_Mdl$Year <- as.factor(pandemic_NOC_Yr_Mdl$Year)
-unloadPkg("dplyr")
+unloadPkg(dplyr)
 
 ```
-
-
+## Medals Earned 
+The plot shows number of medals earned by Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA) before and after the pandemic. There may be more than Gold, Silver or Bronze medals earned by individuals in any sporting event; accounting for the group events.
 ```{r plots_num_medals , include=TRUE}
 NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
 
@@ -279,7 +281,6 @@ pandemic_df <- unique(pandemic_df)
 colnames(pandemic_df) <- c("NOC", "Year", "Total.Medals")
 
 pandemic_df$NOC <- as.factor(pandemic_df$NOC)
-
 
 
 # Basic line plot with points
@@ -296,13 +297,16 @@ ggplot(data=pandemic_df, aes(x=Year, y=Total.Medals, group=NOC, color=NOC)) +
 
 
 ```
+Great Britain (GBR), Denmark (DEN), Sweden (SWE) saw a decline in the number of medals their athletes earned after the pandemic. The Olympics were not held in 1916 due to World War I. 
 
+## Number of Olympic Athletes
+Looking at the same countries, the plot shows the number of athletes they sent to the Olympics from 1908 - 1928. 
 ```{r plots_num_athletes, include=TRUE}
 loadPkg("dplyr")
 NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
 
 p_num_athletes <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
-                                         NOC %in% NOC_SF) %>% group_by(NOC, Year) %>% tally(ID)
+                                         NOC %in% NOC_SF) %>% group_by(NOC, Year) %>% tally(unique(ID))
 
 
 p_num_athletes_df <- data.frame(p_num_athletes$NOC, p_num_athletes$Year, p_num_athletes$n)
@@ -327,8 +331,10 @@ ggplot(data=p_num_athletes_df, aes(x=Year, y=Total.Athletes, group=NOC, color=NO
   
 unloadPkg("dplyr")
 ```
+Great Britain and Sweden saw a sharp decline in the number of athletes that they sent to Olympic events after the pandemic. JOHNSON, NIALL P. A. S., and JUERGEN MUELLER reported England & Wales had approximately 200,000 death toll (per 1,000) and Sweden reported 34,374 death toll during the 1918-1919 pandemic. 
 
-
+## Average Age of Olympians
+The chart displays the average age of Olympians from the eight countries in our data before and after the pandemic.  
 ```{r ageSF}
 loadPkg(dplyr)
 NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
@@ -349,10 +355,11 @@ ggplot(data=pandemic_avg_age, aes(x=Year, y=avg, group=NOC, color=NOC)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
         axis.text.y = element_text(vjust = 1, size = 9),
         panel.border = element_rect(color = "black", fill=NA, size=1)) +
-  labs(title="H1N1 Pademic: Average Age vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+  labs(title="H1N1 Pademic: Average Age vs. Year (1908-1928)", x="Year", y="Avg Age of Athletes (n)")
 ```
+The H1N1 Influenza pandemic "Spanish flu" was fatal for individuals aged 20–40 years. The average age of Olympians competing after the pandemic was increased for all countries in our data set.  
 
-
+## Average Height and Weight of Olympians
 ```{r w_h}
 pandemic_avg_hw<- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
                                          NOC %in% NOC_SF,
@@ -385,6 +392,8 @@ w1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_w, group=NOC, color=NOC)) +
 w1
 
 ```
+Netherlands (NED) and Norway (NOR) had significant increase in the average height and weight of their athletes after Spanish flu pandemic. Sweden (SWE) and France (FRA) saw a decrease in those averages. 
+
 
 # Trends over time
 # Summary and Conclusion
