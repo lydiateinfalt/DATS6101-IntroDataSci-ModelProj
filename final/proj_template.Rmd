@@ -253,7 +253,7 @@ loadPkg(gridExtra)
 ```{r read_pandemic_data}
 p_olympics <- read.csv("pandemic_olympics.csv")
 ```
-(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.)
+(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.) Taken from [@Johnson2002]
 
 Of the European countries that suffered significant excess deaths during the Spanish Influenza Pandemic, these countries competed before and after 1918-1919: Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA). We created a separate pandemic data set containing athletes from these countries that competed in the Olympics between 1908-1928 to study before and after the pandemic. 
 
