@@ -422,7 +422,7 @@ df<- data.frame(p_olympics$Medal, p_olympics$Medal.No.Yes)
 unloadPkg(dplyr)
 ```
 
-## Total Number of Summer Event Olympic Medals vs. Year 
+## Total Number of Olympic Medals (Summer Events) vs. Year 
 ```{r }
 loadPkg(dplyr)
 
@@ -446,20 +446,22 @@ ITA_Tmedals_all <- olympics_total_medals  %>% filter(NOC == "ITA")
 #histogram of Number of Medals
 loadPkg(ggplot2)
 ggplot(data=olympics_summer_medals, aes(x=Year, y=Medals)) +
-  geom_bar(stat="identity", fill="steelblue")+ylab("Total Number of Medals (Summer)") + theme_minimal()
+  geom_bar(stat="identity", fill="steelblue")+ylab("Total Number of Medals (Summer Events)") + theme_minimal()
 
 unloadPkg(dplyr)
 ```
 
 ## Creating Time Series - Italy
+During the 1918 Pandemic, Italy's death toll (per 1,000) was 390,000 death toll. According to Worldodometer,  (https://www.worldometers.info/coronavirus/country/italy/), during the current Covid-19 pandemic, there has been 29,079 deaths in Italy. We will focus on Italy to conduct time series analysis. Can we see a pattern with historical Olympic data before and after the Spanish flu in order to predict how Italy will fare in future Olympics after is emerges from the current novel Corona virus pandemic?
+
+The Olympics data for Italy from 1908-1928 was converted to a time series and plotted "Total Number of Medals vs Year". 
+
 ```{r forecast}
 
 olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
-olympic_all <- ts(ITA_Tmedals_all$n, start=1960, end = 2016, deltat=4)
+olympic_all <- ts(ITA_Tmedals_all$n, start=1908, end = 2016, deltat=4)
 
 ita_olympic <- ts.union(olympic_pts, olympic_all)
-plot(ita_olympic)
-
 
 
 loadPkg(tidyverse)
@@ -468,28 +470,43 @@ ita_df <- ita_df %>% mutate(Num.Medals= if_else(is.na(ita_df$olympic_pts), ita_d
 
 ita_df <- subset(ita_df, select = c(Num.Medals))
 
-ol_ts <- ts(ita_df,start=1908, end=2016, deltat=4 )
-plot(ol_ts)
+
+ol_ts <- ts(ita_df,start=1908, end=2016, deltat=4)
+#plot(ol_ts)
+
+autoplot(ol_ts, color="Blue") +
+  ggtitle("Italy in the Olympics: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
 
 olympic_train <- window(ol_ts, start=1908, end = 1928, deltat=4)
 
-olympic_test <- window(ol_ts, start=2012, end = 2016, deltat=4)
+olympic_test <- window(ol_ts, start=2008, end = 2016, deltat=4)
+
+
+acf(ol_ts,main="Italy Olympics")
 
 ```
+The time series shows random fluctuations in the data over time, no overall trend. The Auto Correlated Function (ACF) plot does not show seasonality, periodicity and cyclic nature of the series. The ACF values are less than 0.05, so they are not significant. So the number of medals may not be correlated to time.
 
-## Using 1908-1928 Time Series as Training Data - Italy
+
+## Using 1908-1928 Time Series as Training Data
+From the quick EDA, time series may not be appropriate method to model the number of medals Italy may earn in future Olympics. As a learning academic exercise, we will explore different time series methodologies to forecast. 
 ```{r forecast1}
 
 olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
 olympic_all <- ts(ITA_Tmedals_all$n, start=1960, end = 2016, deltat=4)
 
 olympic_train <- window(olympic_pts, start=1908, end = 1928, deltat=4)
-olympic_train1 <- window(ol_ts, start=1960, end = 2012, deltat=4)
-olympic_test <- window(ol_ts, start=2012, end = 2016, deltat=4)
+olympic_train1 <- window(ol_ts, start=1960, end = 2008, deltat=4)
+olympic_test <- window(ol_ts, start=2008, end = 2016, deltat=4)
 
 ```
 
 ## Exploring Holt-Winters and ETS-ANN Time Series Forecasting 
+Holt-Winters uses exponential smoothing to make short-term forecasts. Models is designated as either additive or multiplicative. 
+
 ```{r fit}
 fit1.hw <- HoltWinters(x=olympic_train, beta = FALSE,gamma = FALSE) 
 plot(fit1.hw)
@@ -497,19 +514,34 @@ summary(fit1.hw)
 
 fit2.hw <- HoltWinters(x=olympic_train1, beta = FALSE, gamma = FALSE) 
 plot(fit2.hw)
-summary(fit2.hw)
+#summary(fit2.hw)
+
 
 loadPkg(forecast)
 fit1.ets <-ets(olympic_train1, model="ANN")
-plot(fit1.ets)
+#plot(fit1.ets)
 fit1_forecast <- forecast(fit1.ets, h = 3) 
 fit1_forecast
 
+autoplot(fit1_forecast)+
+  ggtitle("ETS Decomposition: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
+
 fit1.hw.forecast <- forecast(fit1.hw, 8)
-plot(fit1.hw.forecast)
+
+autoplot(fit1.hw.forecast)+
+  ggtitle("Holt-Winters Forecast 1908-28: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
 
 fit2.hw.forecast <- forecast(fit2.hw, 8)
-plot(fit2.hw.forecast)
+
+autoplot(fit2.hw.forecast)+
+  ggtitle("Holt-Winters Forecast 1960-2008: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
 
 
 
@@ -529,10 +561,10 @@ fit.exp <- tslm(olympic_all ~ trend, lambda = 0)
 fcasts.exp <- forecast(fit.exp, h = h)
 
 t <- time(olympic_all)
-t.break1 <- 1960
-t.break2 <- 2016
-tb1 <- ts(pmax(0, t - t.break1), start = 1960)
-tb2 <- ts(pmax(0, t - t.break2), start = 1960)
+t.break1 <- 1908
+t.break2 <- 1960
+tb1 <- ts(pmax(0, t - t.break1), start = 1908)
+tb2 <- ts(pmax(0, t - t.break2), start = 1908)
 
 fit.pw <- tslm(olympic_all ~ t + tb1 + tb2)
 t.new <- t[length(t)] + seq(h)
@@ -558,10 +590,12 @@ autoplot(olympic_all) +
   autolayer(fcasts.exp, series="Exponential", PI=FALSE) +
   autolayer(fcasts.spl, series="Cubic Spline", PI=FALSE) +
   xlab("Year") + ylab("Number of Medals") +
-  ggtitle("Italy in the Olympics") +
+  ggtitle("Italy in the Olympics Time Series ") +
   guides(colour = guide_legend(title = " "))
 
 ```
+Above plots try to fit the number of medals to an algorithm that could would best be able to predict the number of Olympic medals Italy will earn after Covid-19 pandemic. Visually, Cubic Spline seems closest in approximation.   
+
 ## Arima Model
 ```{r arima}
 olympic_arima<- auto.arima(olympic_all, seasonal=FALSE)
