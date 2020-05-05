@@ -452,7 +452,7 @@ unloadPkg(dplyr)
 ```
 
 ## Creating Time Series - Italy
-During the 1918 Pandemic, Italy's death toll (per 1,000) was 390,000 death toll. According to Worldodometer,  (https://www.worldometers.info/coronavirus/country/italy/), during the current Covid-19 pandemic, there has been 29,079 deaths in Italy. We will focus on Italy to conduct time series analysis. Can we see a pattern with historical Olympic data before and after the Spanish flu in order to predict how Italy will fare in future Olympics after is emerges from the current novel Corona virus pandemic?
+During the 1918 Pandemic, Italy's death toll (per 1,000) was 390,000 death toll. According to [Worldodometer](https://www.worldometers.info/coronavirus/country/italy/), during the current Covid-19 pandemic, there has been 29,079 deaths in Italy. We will focus on Italy to conduct time series analysis. Can we see a pattern with historical Olympic data before and after the Spanish flu in order to predict how Italy will fare in future Olympics after is emerges from the current novel Corona virus pandemic?
 
 The Olympics data for Italy from 1908-1928 was converted to a time series and plotted "Total Number of Medals vs Year". 
 
@@ -606,20 +606,27 @@ arima_predict <- predict(olympic_arima, n.ahead = 5)
 
 ```
 
+The Olympic dat set was divided into a training set (1908-1928) which includes the 1918-1919 Spanish Influenza pandemic and test set (2008-2016). Using MAPE (Mean Absolute Percent Error) measures the size of the error in percentage terms (Taken from [@Stellwagen2011]) to evaluate Holt-Winters and ETS-ANN time series predictions for 2012 and 2016 for Medals won by Italy. The table below show MAPE values less than 10% which is a reasonable model.  
+
+![](MAPE_formula.jpg)
+
 ```{r time_series_summary}
 hw_summary <- data.frame(cbind(year = c("2012","2016","2020"),
-predicted = c(130,130, 130),
-actual = c(132, 144, NA)))
-colnames(hw_summary) <- c("Year", "Predicted Medals", "Actual Medals")
+                               actual = c(132, 144, NA),
+                              predicted = c(130,130, 130),
+                              mape=c(9.72, 1.53,NA)))
+
+colnames(hw_summary) <- c("Year", "Actual", "Predicted", "MAPE (%)")
 
 hw_summary %>%
-  kable(caption = "Holt-Winters and ETS-ANN Forecast") %>%
+  kable(caption = "Holt-Winters and ETS-ANN Forecast: Italy Olympic Medals") %>%
   kable_styling()
 
 
 ```
-The Cubic-Spline predicts for 2020, Italy will earn 117 medals.
+
 ARIMA Time Series model predicts 107 medals for Italy in 2020. We will have to wait until the next Olympics to be able to evaluate the accuracy of these predictions for Italy's performance.  
+
 
 
 
