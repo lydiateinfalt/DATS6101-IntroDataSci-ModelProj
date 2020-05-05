@@ -625,7 +625,9 @@ hw_summary %>%
 
 ```
 
-ARIMA Time Series model predicts 107 medals for Italy in 2020. We will have to wait until the next Olympics to be able to evaluate the accuracy of these predictions for Italy's performance.  
+ARIMA Time Series model predicts 107 medals for Italy in 2020. We will have to wait until the next Olympics to be able to evaluate the accuracy of these predictions for Italy's performance. 
+
+The analysis of Olympic Medals that Italy earned before and after the 1918-1919 Spanish flu Pandemic and more current data were constructed into a time series on a superficial level. The resulting Olympic time series data on Italy could not be easily decomposed into the main components of a time series: trend, season or irregular fluctations. There are not hidden information we could be deciphered from studying 1918-1919 pandemic that could inform the future after Covid-19.
 
 
 
