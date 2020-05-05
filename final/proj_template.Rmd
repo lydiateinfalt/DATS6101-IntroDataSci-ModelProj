@@ -548,6 +548,7 @@ autoplot(fit2.hw.forecast)+
 ```
 ```{r accuracy}
 loadPkg(dplyr)
+ITA_2012 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2012")
 ITA_2016 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2016")
 
 ```
@@ -579,7 +580,6 @@ fit.spline <- tslm(olympic_all ~ t + I(t^2) + I(t^3) +
   I(tb1^3) + I(tb2^3))
 fcasts.spl <- forecast(fit.spline, newdata = newdata)
 
-
 autoplot(olympic_all) +
   autolayer(fitted(fit.lin), series = "Linear") +
   autolayer(fitted(fit.exp), series = "Exponential") +
@@ -602,8 +602,27 @@ olympic_arima<- auto.arima(olympic_all, seasonal=FALSE)
 summary(olympic_arima)
 
 olympic_arima %>% forecast(h=10) %>% autoplot(include=8)
+arima_predict <- predict(olympic_arima, n.ahead = 5)
 
 ```
+
+```{r time_series_summary}
+hw_summary <- data.frame(cbind(year = c("2012","2016","2020"),
+predicted = c(130,130, 130),
+actual = c(132, 144, NA)))
+colnames(hw_summary) <- c("Year", "Predicted Medals", "Actual Medals")
+
+hw_summary %>%
+  kable(caption = "Holt-Winters and ETS-ANN Forecast") %>%
+  kable_styling()
+
+
+```
+The Cubic-Spline predicts for 2020, Italy will earn 117 medals.
+ARIMA Time Series model predicts 107 medals for Italy in 2020. We will have to wait until the next Olympics to be able to evaluate the accuracy of these predictions for Italy's performance.  
+
+
+
 
 # Trends over time
 # Summary and Conclusion
