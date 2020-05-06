@@ -112,6 +112,27 @@ xkablesummary = function(df) {
     xkabledply("Table: Statistics summary.", "center")
 
 }
+
+xkablevif = function(model) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( model )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+
+  vifs %>%
+    xtable() %>% 
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>% # otherwise it will only has the generic name as 'V1' for the first vector in the table
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
+}
+
 ```
 
 ```{r import_data}
@@ -231,6 +252,109 @@ Unless you ignore the athletes that didn't receive a medal, building a general m
 
 # Clustering, Kmeans, Kmedoids 
 # Logit Regression
+
+## Linear Model
+
+```{r}
+loadPkg(dplyr)
+loadPkg(kableExtra)
+
+
+new_data <- olympic_data %>% filter(Medal.No.Yes == "1") %>% group_by(Year) %>% add_tally(as.numeric(Medal.No.Yes), name="TMedals")
+
+keep_columns <- c( "NOC", "Year", "Decade", "Sex", "Age", "Height", "Weight", "BMI", "Population", "GDP", "Medal.No.Yes", "TMedals")
+new_data <- na.omit(new_data)
+
+new_data_subset <- new_data[keep_columns]
+new_data_subset <- new_data_subset %>% filter(!is.na(Age))
+
+unloadPkg(dplyr)
+```
+
+```{r pairs, eval=FALSE}
+loadPkg(psych) # pair plots with histogram on diagonal and other options
+pairs.panels(olympics_subset, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = FALSE,  # show density plots
+             ellipses = FALSE # show correlation ellipses
+             )
+unloadPkg(psych)
+```
+### Linear Model1 TMedals ~ BMI
+```{r linear_model, results="markup"}
+loadPkg(dyn)
+model1 = dyn$lm(TMedals ~ BMI, data=new_data)
+sum_md1 = summary(model1)
+sum_md1
+
+
+```
+
+```{r vif_md1}
+
+vif_md1 = faraway::vif(model1)
+```
+
+### Linear Model2 TMedals ~ Age
+```{r model2}
+
+model2 = dyn$lm(TMedals ~ Age, data=new_data)
+sum_md2 = summary(model2)
+sum_md2
+```
+
+```{r vifmodel2}
+vif_md2 = faraway::vif(model2)
+#vif_md2
+```
+
+### Linear Model 3 TMedals ~ BMI + Age
+```{r model3}
+model3 = dyn$lm(TMedals ~ BMI + Age , data=new_data)
+sum_md3 = summary(model3)
+sum_md3
+```
+
+### Linear Model 4 TMedals ~ BMI + Age + GDP
+```{r model4}
+model4 = dyn$lm(TMedals ~ BMI + Age + GDP , data=new_data)
+sum_md4 = summary(model4)
+sum_md4
+
+```
+
+
+```{r, results='asis'}
+loadPkg(kableExtra)
+loadPkg(xtable)
+xkabledply(sum_md4, "Linear model4 summary", "center")
+
+xkablevif(model4)
+```
+
+```{r summary_linear_models}
+
+
+
+model_names <- c("Linear Model 1: TMedals ~ BMI", "Linear Model 2: TMedals ~ Age", "Linear Model 3: TMedals ~ BMI + Age", "Linear Model 4: TMedals ~ BMI + Age+ GDP")
+m <- c(summary(model1))
+ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
+df <- data.frame(model_names, ar2_values)
+
+names(df) <- c("", "Adjusted R2")
+
+kable(df) %>% kable_styling()
+
+vdf <- data.frame(vif_md2)
+  
+vtable<-  kable(vdf) %>% kable_styling
+unloadPkg(dyn)
+unloadPkg(kableExtra)
+unloadPkg(xtable)
+```
+
+
 # KNN
 # Random Forest
 # Pandemic (Spanish Flu)

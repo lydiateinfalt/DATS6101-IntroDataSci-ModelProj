@@ -1544,7 +1544,9 @@ $(document).ready(function () {
       <li><a href="#eda"><span class="toc-section-number">3</span> EDA</a></li>
       <li><a href="#olympics-correlation-plot"><span class="toc-section-number">4</span> Olympics Correlation plot</a></li>
       <li><a href="#clustering-kmeans-kmedoids"><span class="toc-section-number">5</span> Clustering, Kmeans, Kmedoids</a></li>
-      <li><a href="#logit-regression"><span class="toc-section-number">6</span> Logit Regression</a></li>
+      <li><a href="#logit-regression"><span class="toc-section-number">6</span> Logit Regression</a><ul>
+      <li><a href="#linear-model"><span class="toc-section-number">6.1</span> Linear Model</a></li>
+      </ul></li>
       <li><a href="#knn"><span class="toc-section-number">7</span> KNN</a></li>
       <li><a href="#random-forest"><span class="toc-section-number">8</span> Random Forest</a></li>
       <li><a href="#pandemic-spanish-flu"><span class="toc-section-number">9</span> Pandemic (Spanish Flu)</a><ul>
@@ -2682,6 +2684,274 @@ Medal.No.Yes
 </div>
 <div id="logit-regression" class="section level1">
 <h1><span class="header-section-number">6</span> Logit Regression</h1>
+<div id="linear-model" class="section level2">
+<h2><span class="header-section-number">6.1</span> Linear Model</h2>
+<div id="linear-model1-tmedals-bmi" class="section level3">
+<h3><span class="header-section-number">6.1.1</span> Linear Model1 TMedals ~ BMI</h3>
+<pre><code>
+Call:
+lm(formula = dyn(TMedals ~ BMI), data = new_data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-1863.7 -1222.0   407.5   894.2  1350.6 
+
+Coefficients:
+            Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept) 2500.918     59.891  41.758  &lt; 2e-16 ***
+BMI           -6.776      2.580  -2.626  0.00865 ** 
+---
+Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+
+Residual standard error: 1024 on 17973 degrees of freedom
+Multiple R-squared:  0.0003835, Adjusted R-squared:  0.0003279 
+F-statistic: 6.895 on 1 and 17973 DF,  p-value: 0.00865</code></pre>
+</div>
+<div id="linear-model2-tmedals-age" class="section level3">
+<h3><span class="header-section-number">6.1.2</span> Linear Model2 TMedals ~ Age</h3>
+<pre><code>
+Call:
+lm(formula = dyn(TMedals ~ Age), data = new_data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2041.5 -1196.8   406.8   886.3  1292.2 
+
+Coefficients:
+            Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept) 2026.521     39.014  51.944   &lt;2e-16 ***
+Age           12.488      1.501   8.322   &lt;2e-16 ***
+---
+Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+
+Residual standard error: 1022 on 17973 degrees of freedom
+Multiple R-squared:  0.003839,  Adjusted R-squared:  0.003783 
+F-statistic: 69.26 on 1 and 17973 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+<div id="linear-model-3-tmedals-bmi-age" class="section level3">
+<h3><span class="header-section-number">6.1.3</span> Linear Model 3 TMedals ~ BMI + Age</h3>
+<pre><code>
+Call:
+lm(formula = dyn(TMedals ~ BMI + Age), data = new_data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2064.6 -1193.6   406.3   887.8  1518.3 
+
+Coefficients:
+            Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept) 2251.146     65.945  34.137  &lt; 2e-16 ***
+BMI          -11.061      2.619  -4.224 2.41e-05 ***
+Age           13.665      1.526   8.957  &lt; 2e-16 ***
+---
+Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+
+Residual standard error: 1021 on 17972 degrees of freedom
+Multiple R-squared:  0.004826,  Adjusted R-squared:  0.004716 
+F-statistic: 43.58 on 2 and 17972 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+<div id="linear-model-4-tmedals-bmi-age-gdp" class="section level3">
+<h3><span class="header-section-number">6.1.4</span> Linear Model 4 TMedals ~ BMI + Age + GDP</h3>
+<pre><code>
+Call:
+lm(formula = dyn(TMedals ~ BMI + Age + GDP), data = new_data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-2310.5 -1081.3   213.8   924.1  1642.9 
+
+Coefficients:
+              Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)  2.119e+03  6.458e+01  32.820  &lt; 2e-16 ***
+BMI         -1.115e+01  2.558e+00  -4.357 1.33e-05 ***
+Age          1.377e+01  1.490e+00   9.241  &lt; 2e-16 ***
+GDP          5.096e-11  1.735e-12  29.371  &lt; 2e-16 ***
+---
+Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+
+Residual standard error: 997.8 on 17971 degrees of freedom
+Multiple R-squared:  0.05041,   Adjusted R-squared:  0.05025 
+F-statistic:   318 on 3 and 17971 DF,  p-value: &lt; 2.2e-16</code></pre>
+<table class="table table table-striped" style="margin-left: auto; margin-right: auto; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>
+Linear model4 summary
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+Estimate
+</th>
+<th style="text-align:right;">
+Std. Error
+</th>
+<th style="text-align:right;">
+t value
+</th>
+<th style="text-align:right;">
+Pr(&gt;|t|)
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+(Intercept)
+</td>
+<td style="text-align:right;">
+2119.3381
+</td>
+<td style="text-align:right;">
+64.5752
+</td>
+<td style="text-align:right;">
+32.8197
+</td>
+<td style="text-align:right;">
+0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+BMI
+</td>
+<td style="text-align:right;">
+-11.1451
+</td>
+<td style="text-align:right;">
+2.5581
+</td>
+<td style="text-align:right;">
+-4.3567
+</td>
+<td style="text-align:right;">
+0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Age
+</td>
+<td style="text-align:right;">
+13.7720
+</td>
+<td style="text-align:right;">
+1.4903
+</td>
+<td style="text-align:right;">
+9.2411
+</td>
+<td style="text-align:right;">
+0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+GDP
+</td>
+<td style="text-align:right;">
+0.0000
+</td>
+<td style="text-align:right;">
+0.0000
+</td>
+<td style="text-align:right;">
+29.3708
+</td>
+<td style="text-align:right;">
+0
+</td>
+</tr>
+</tbody>
+</table>
+<table class="table table table-striped" style="margin-left: auto; margin-right: auto; width: auto !important; ">
+<caption>
+VIFs of the model
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+VIF
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Age
+</td>
+<td style="text-align:right;">
+1.0345
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+BMI
+</td>
+<td style="text-align:right;">
+1.0345
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+GDP
+</td>
+<td style="text-align:right;">
+1.0000
+</td>
+</tr>
+</tbody>
+</table>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+</th>
+<th style="text-align:right;">
+Adjusted R2
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Linear Model 1: TMedals ~ BMI
+</td>
+<td style="text-align:right;">
+0.0003279
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Linear Model 2: TMedals ~ Age
+</td>
+<td style="text-align:right;">
+0.0037831
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Linear Model 3: TMedals ~ BMI + Age
+</td>
+<td style="text-align:right;">
+0.0047157
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Linear Model 4: TMedals ~ BMI + Age+ GDP
+</td>
+<td style="text-align:right;">
+0.0502501
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="knn" class="section level1">
 <h1><span class="header-section-number">7</span> KNN</h1>
@@ -2864,7 +3134,7 @@ NA
 
 <div id="postamble" data-toggle="wy-nav-shift" class="status">
 <p class="author"><span class="glyphicon glyphicon-user"></span> team 010100</p>
-<p class="date"><span class="glyphicon glyphicon-calendar"></span> 05 May, 2020</p>
+<p class="date"><span class="glyphicon glyphicon-calendar"></span> 06 May, 2020</p>
 </div>
 
 <a href="https://github.com/IzzyIllari/DATS-Model-Proj" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#FD6C6C; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
