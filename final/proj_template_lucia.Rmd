@@ -275,7 +275,7 @@ loadPkg(cluster)
 loadPkg(factoextra)
 loadPkg(seriation)
 loadPkg(fpc)
-loadPkg(rgl)
+#loadPkg(rgl)
 loadPkg(gridExtra)
 loadPkg(clustertend)
 ```
@@ -503,17 +503,17 @@ fviz_cluster(kmeans(softPG, centers = 3, nstart = 25), geom = "point", data = so
 but the clusters are still on top of each other. It appears for some sports adding Population and GDP can help define new clusters, but for other sports, it muddies them. It is possible other clustering methods may reveal clusters not found using Kmeans and Kmedoids.
 
 ```{r unload_packages_clust, include = FALSE}
-unloadPkg(rgl)
+#unloadPkg(rgl)
 unloadPkg(fpc)
 unloadPkg(clustertend)
 unloadPkg(seriation)
 unloadPkg(factoextra)
-unloadPkg(cluster)
+#unloadPkg(cluster)
 unloadPkg(tidyverse)
-unloadPkg(tidyr)
-unloadPkg(gridExtra)
-unloadPkg(ggplot2)
-unloadPkg(dplyr)
+#unloadPkg(tidyr)
+#unloadPkg(gridExtra)
+#unloadPkg(ggplot2)
+#unloadPkg(dplyr)
 ```
 
 # Logit Regression
@@ -562,7 +562,6 @@ vif_md1 = faraway::vif(model1)
 ```
 
 ```{r model2}
-
 model2 = dyn$lm(TMedals ~ GDP + Population, data=new_data)
 sum_md2 = summary(model2)
 #sum_md2
@@ -596,19 +595,19 @@ vif_md4 = faraway::vif(model4)
 ```
 
 ```{r summary_linear_models}
-model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
-m <- c(summary(model1))
-ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
-df <- data.frame(model_names, ar2_values)
-
-names(df) <- c("", "Adjusted R2")
-
-kable(df) %>% kable_styling()
-
-vdf <- data.frame(vif_md2)
-  
-vtable<-  kable(vdf) %>% kable_styling
-xkablevif(model4)
+# model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
+# m <- c(summary(model1))
+# ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
+# df <- data.frame(model_names, ar2_values)
+# 
+# names(df) <- c("", "Adjusted R2")
+# 
+# kable(df) %>% kable_styling()
+# 
+# vdf <- data.frame(vif_md2)
+#    
+# vtable<-  kable(vdf) %>% kable_styling
+# xkablevif(model4)
 ```
 
 According to the Adjusted $R^2$ value, model 4 is the best fit. The coefficients’ p-values for (Intercept), GDP, Population, Height, and Sport are less than significance level $\alpha$ = 0.05, making them statistically significant. The VIF values for GDP, Population, Height and Sport are greater than 1 but less than 5 so multicollinearity is not an issue with this model. 
@@ -625,6 +624,7 @@ unloadPkg(dyn)
 unloadPkg(kableExtra)
 unloadPkg(xtable)
 ```
+
 ## Logit Regression: Factors influencing Earning Olympic Medals
 We used logit regression to model what factors influence the chances of an athlete receiving a medal, `Medal.No.Yes`.
 ```{r subset_data_logit}
@@ -945,7 +945,7 @@ ita_df <- subset(ita_df, select = c(Num.Medals))
 ol_ts <- ts(ita_df,start=1908, end=2016, deltat=4)
 #plot(ol_ts)
 
-autoplot(ol_ts, color="Blue") +
+forecast::autoplot(ol_ts, color="Blue") +
   ggtitle("Italy in the Olympics: Number of Medals") +
   xlab("Year") +
   ylab("Number of Medals")
