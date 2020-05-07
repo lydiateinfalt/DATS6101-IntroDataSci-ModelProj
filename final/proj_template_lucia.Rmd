@@ -1,0 +1,1110 @@
+---
+title: "Olympic Data"
+author: "team 010100"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmdformats::readthedown:
+    css: styles.css
+    highlight: kate
+    code_folding: hide
+    number_sections: yes
+    keep_tex: yes
+    includes:
+        after_body: github.html
+bibliography: bibliography.bib
+csl: american-institute-of-physics.csl
+---
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r setup, echo=FALSE, cache=FALSE}
+loadPkg(knitr)
+loadPkg(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+# Introduction
+Team 010100 are the following members: Izzy Illari, Lucia Illari, Omar Qusous, and Lydia Teinfalt. You may find our work over on [GitHub](https://github.com/IzzyIllari/DATS-Model-Proj).
+
+For the second portion of our group project, we kept Olympics data from the EDA. Our SMART questions were `What factors can be used to model the probability of being awarded a medal?` What groups/clusters do athletes of different sports fall into? How does a pandemic affect the medals awarded? How can the evolution of athlete characteristics over time be modelled? With these questions in mind we went to see if we could find use the data on Olympians to find patterns and create models that could answer the questions.
+
+We used a dataset called `120 years of Olympic history: athletes and results` on Kaggle over here: [https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results). This historical dataset includes all Olympic Games from Athens 1896 to Rio 2016, which was scraped from [https://www.sports-reference.com/](https://www.sports-reference.com/). We focused on data from Olympic events 1960-2016 when looking at clustering, Kmeans, Linear and Logit Regression and trends over time. For the pandemic analysis, we focused on data of Olympics participating in events before and after the H1N1 Pandemic from 1918-1919.   
+
+The report is organized as follows:
+
+1. Summary of Dataset
+2. Data Prep
+3. EDA
+4. Clustering, Kmeans, Kmedoids 
+5. Linear and Logit Regression
+6. Random Forest
+7. Pandemic (Spanish Flu)
+8. Trends over time
+9. Summary and Conclusion
+10. References
+
+# Summary of Dataset
+The data looks like the following:
+
+```{r xkablesummary, include = FALSE}
+loadPkg(xtable)
+loadPkg(kableExtra)
+loadPkg(stringi)
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+
+xkablevif = function(model) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( model )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+
+  vifs %>%
+    xtable() %>% 
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>% # otherwise it will only has the generic name as 'V1' for the first vector in the table
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
+}
+```
+
+```{r import_data}
+olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$ID <- as.factor(olympic_data$ID)
+olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
+olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
+#head(olympic_data)
+str(olympic_data)
+```
+
+
+The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_data)` rows/entries, for a total of `r ncol(olympic_data)*nrow(olympic_data)` individual data points. In `olympic_data` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
+
+1. ID: Unique number for each athlete
+2. Name: Athlete's name
+3. Sex: M or F
+4. Age: Integer
+5. Height: centimeters
+6. Weight: kilograms
+7. Team: Team name
+8. NOC: National Olympic Committee 3-letter code
+9. Games: Year and season
+10. Year: Integer
+11. Season: Summer or Winter
+12. City: Host city
+13. Sport
+14. Event
+15. Medal: Gold, Silver, Bronze, or NA
+
+To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. We have modified the data from the kaggle dataset from which it was originally taken. The dataset now starts at 1960 and includes the new following variables:
+
+1. Decade (factor)
+2. First name (factor)
+3. Last name (factor)
+4. BMI (numeric)
+5. BMI category (factor)
+6. Population (numeric)
+7. GDP (numeric)
+8. GDPpC (numeric)
+9. Medal: Yes or No (factor)
+
+
+```{r remove_NAs, echo = FALSE}
+olympic.data <- olympic_data
+
+loadPkg(VIM)
+aggr(olympic.data)
+unloadPkg(VIM)
+
+olympic_data_noNA <- na.omit(olympic_data)
+olympic_data <- olympic_data_noNA
+data_sport <- split(olympic_data_noNA, olympic_data_noNA$Sport)
+```
+
+
+# EDA
+
+For EDA, we can do a quick summary to just look at the data.
+
+```{r keep, results = "markup"}
+xkablesummary(olympic_data)
+
+# loadPkg(psych)
+# pairs.panels(olympic_data[,-length(olympic_data)], 
+#              method = "pearson",
+#              hist.col = "#CCFF66",
+#              density = TRUE,
+#              ellipses = TRUE
+#              )
+# unloadPkg(psych)
+
+olympic_data$Sex.Int <- c(as.numeric(as.factor(olympic_data$Sex)))
+olympic_data$NOC.Int <- c(as.numeric(as.factor(olympic_data$NOC)))
+olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
+```
+
+# Olympics Correlation plot
+
+Just quickly visualizing thw correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are noturally going to be highly correlated.
+
+```{r subset_corr, echo = FALSE}
+loadPkg("dplyr")
+olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
+unloadPkg("dplyr")
+
+loadPkg("corrplot")
+cols.num <- c(1:length(olympic.data))
+num.df <- olympic.data
+num.df[cols.num] <- sapply(olympic.data[cols.num],as.numeric)
+cor.all <- cor(num.df[,c(1,2,8:13,15:17,24)], use="pairwise.complete.obs")
+cmat.all <- corrplot(cor.all, method="pie", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+unloadPkg("corrplot")
+```
+
+It might be more useful to focus in on the correlations for only the variable Medal.No.Yes and Medal:
+
+```{r focus_corr, results = "markup"}
+loadPkg(corrr)
+loadPkg(plyr)
+
+cor.medNY <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal.No.Yes)
+cor.medNY[order(cor.medNY$Medal.No.Yes, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+cor.medal <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal)
+cor.medal[order(cor.medal$Medal, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+unloadPkg(corrr)
+unloadPkg(plyr)
+```
+
+Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off the strength of the correlations.
+
+# Clustering, Kmeans, Kmedoids 
+
+My first thought was to do some clustering with just the numeric columns originally present in the data, namely Age, Weight, and Height, so I decided to look at some 3D scatter plots.
+
+```{r 3d_scatter, echo = FALSE}
+loadPkg(plot3D)
+par(mfrow=c(1,2))
+soft.df <- subset(olympic.data, Sport == "Softball")[,c(9:11)]
+scatter3D(soft.df[,1], soft.df[,2], soft.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Softball", ticktype = "detailed")
+
+tri.df <- subset(olympic.data, Sport == "Triathlon")[,c(9:11)]
+scatter3D(tri.df[,1], tri.df[,2], tri.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Triathlon", ticktype = "detailed")
+unloadPkg(plot3D)
+```
+
+So we are indeed seeing different behavior with these two sports - Triathlon appears more spread out but Softball appears to mostly clustered around lower ages. Well first thing's first, before we just go ahead seeing what clusters there are, we should calculate the Hopkin's Statistic. We can conduct the Hopkins Statistic test iteratively, using 0.5 as the threshold to reject the alternative hypothesis. That is, if H < 0.5, then it is unlikely that D has statistically significant clusters. Put in other words, If the value of Hopkins statistic is close to 1, then we can reject the null hypothesis and conclude that the dataset D is significantly a clusterable data. We need to make sure to remove NAs and scale the variables to make them comparable. Scaling consists of transforming the variables such that they have mean zero and standard deviation one.
+
+```{r useful_packages_clust, include = FALSE}
+loadPkg(dplyr)
+loadPkg(tidyverse)
+loadPkg(ggplot2)
+loadPkg(cluster)
+loadPkg(factoextra)
+loadPkg(seriation)
+loadPkg(fpc)
+loadPkg(rgl)
+loadPkg(gridExtra)
+loadPkg(clustertend)
+```
+
+```{r prep, echo = FALSE}
+triPG <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight", "Population", "GDP")]
+triPG_o <- triPG
+triPG_o <- triPG_o[complete.cases(triPG_o), ]
+triPG_o <- na.omit(triPG_o)
+triPG <- triPG[complete.cases(triPG), ]
+triPG <- na.omit(triPG) #to remove any missing value that might be present in the data
+triPG <- scale(triPG)
+#data must be standardized to make variables comparable; consists of transforming the variables such that they have mean zero and standard deviation one
+
+tri <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight")]
+tri_o <- tri
+tri_o <- tri_o[complete.cases(tri_o), ]
+tri_o <- na.omit(tri_o)
+tri <- tri[complete.cases(tri), ]
+tri <- na.omit(tri)
+tri <- scale(tri)
+
+softPG <- subset(olympic_data, Sport == "Softball")[,c("Age", "Height", "Weight", "Population", "GDP")]
+softPG_o <- softPG
+softPG_o <- softPG_o[complete.cases(softPG_o), ]
+softPG_o <- na.omit(softPG_o)
+softPG <- softPG[complete.cases(softPG), ]
+softPG <- na.omit(softPG)
+softPG <- scale(softPG)
+
+soft <- subset(olympic_data, Sport == "Softball")[,c("Age", "Height", "Weight")]
+soft_o <- soft
+soft_o <- soft_o[complete.cases(soft_o), ]
+soft_o <- na.omit(soft_o)
+soft <- soft[complete.cases(soft), ]
+soft <- na.omit(soft)
+soft <- scale(soft)
+```
+
+```{r hopkins, results = "markup"}
+set.seed(123)
+print("Triathlon without Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(tri, n = nrow(tri)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Triathlon with Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(triPG, n = nrow(triPG)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Softball without Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(soft, n = nrow(soft)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Softball with Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(softPG, n = nrow(softPG)-1, graph = FALSE)$hopkins_stat, "\n")
+```
+
+Clearly all of these values are greater than 0.5, so there are statistically significant clusters present. Of course, Kmeans (and Kmedoids) requires us to specify "how many $k$, i.e., clusters?" We can use the elbow method, the silhouette method, and the gap statistic to get an idea for how many $k$ we should be specifying.
+
+```{r num_k_tri, echo = FALSE}
+set.seed(123)
+
+tk_k1 <- fviz_nbclust(tri, kmeans, method = "wss")
+tk_k2 <- fviz_nbclust(tri, kmeans, method = "silhouette")
+tk_k3 <- fviz_nbclust(tri, kmeans, method = "gap_stat")
+tk_p1 <- fviz_nbclust(tri, pam, method = "wss")
+tk_p2 <- fviz_nbclust(tri, pam, method = "silhouette")
+tk_p3 <- fviz_nbclust(tri, pam, method = "gap_stat")
+
+grid.arrange(tk_k1,tk_k2, tk_k3, top = "Clusters with Kmeans for Triathlon, without Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tk_p1,tk_p2, tk_p3, top = "Clusters with Kmedoids for Triathlon, without Population and GDP", ncol = 1, nrow = 3)
+
+tpgk_k1 <- fviz_nbclust(triPG, kmeans, method = "wss")
+tpgk_k2 <- fviz_nbclust(triPG, kmeans, method = "silhouette")
+tpgk_k3 <- fviz_nbclust(triPG, kmeans, method = "gap_stat")
+tpgk_p1 <- fviz_nbclust(triPG, pam, method = "wss")
+tpgk_p2 <- fviz_nbclust(triPG, pam, method = "silhouette")
+tpgk_p3 <- fviz_nbclust(triPG, pam, method = "gap_stat")
+
+grid.arrange(tpgk_k1,tpgk_k2, tpgk_k3, top = "Clusters with Kmeans for Triathlon, with Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tpgk_p1,tpgk_p2, tpgk_p3, top = "Clusters with Kmedoids for Triathlon, with Population and GDP", ncol = 1, nrow = 3)
+```
+
+For the Triathlon data with only variables Age, Height, and Weight, for Kmeans and Kmedoids, we'll try $k$=2, and for the Triathlon data that additionally has Population and GDP, we'll try $k$=3 and $k$=7.
+
+```{r num_k_soft, echo = FALSE}
+sk_k1 <- fviz_nbclust(soft, kmeans, method = "wss")
+sk_k2 <- fviz_nbclust(soft, kmeans, method = "silhouette")
+sk_k3 <- fviz_nbclust(soft, kmeans, method = "gap_stat")
+sk_p1 <- fviz_nbclust(soft, pam, method = "wss")
+sk_p2 <- fviz_nbclust(soft, pam, method = "silhouette")
+sk_p3 <- fviz_nbclust(soft, pam, method = "gap_stat")
+
+grid.arrange(sk_k1,sk_k2, sk_k3, top = "Clusters with Kmeans for Softball, without Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(sk_p1,sk_p2, sk_p3, top = "Clusters with Kmedoids for Softball, without Population and GDP", ncol = 1, nrow = 3)
+
+spgk_k1 <- fviz_nbclust(softPG, kmeans, method = "wss")
+spgk_k2 <- fviz_nbclust(softPG, kmeans, method = "silhouette")
+spgk_k3 <- fviz_nbclust(softPG, kmeans, method = "gap_stat")
+spgk_p1 <- fviz_nbclust(softPG, pam, method = "wss")
+spgk_p2 <- fviz_nbclust(softPG, pam, method = "silhouette")
+spgk_p3 <- fviz_nbclust(softPG, pam, method = "gap_stat")
+
+grid.arrange(spgk_k1,spgk_k2, spgk_k3, top = "Clusters with Kmeans for Softball, with Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(spgk_p1,spgk_p2, spgk_p3, top = "Clusters with Kmedoids for Softball, with Population and GDP", ncol = 1, nrow = 3)
+```
+
+This is interesting for the Softbll. Though according to the Hopkin's statistic there were statistically significant clusters, $k$=1 keeps being suggested. There is likely to be a lot of overlapping data points in the clusters when $k\geq$2. I can try $k$=2 for Softball with only Age, Weight, and Height, and $k$=3 for Kmedoids and $k$=6 for Kmeans for Population and GDP in addition.
+
+```{r tri_clust, results = "markup"}
+get_pca(prcomp(tri))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(tri, centers = 2, nstart = 25), geom = "point", data = tri)
+fviz_cluster(pam(tri, 2), geom = "point")
+
+loadPkg(dplyr)
+loadPkg(tidyr)
+loadPkg(tidyverse)
+
+tri_o %>%
+  mutate(Cluster = kmeans(tri, centers = 2, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+tri_o %>%
+  mutate(Cluster = pam(tri, 2)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+```
+
+I will only print out the means for the clustering here with the most distinct clusters, which is $k$=3 using Kmeans.
+
+```{r triPG_clust, results = "markup"}
+get_pca(prcomp(triPG))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG)
+triPG_o %>%
+  mutate(Cluster = kmeans(triPG, centers = 3, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+fviz_cluster(kmeans(triPG, centers = 7, nstart = 25), geom = "point", data = triPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 7, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(triPG, 3), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 3)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(triPG, 7), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 7)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+```
+
+We use Population and GDP here as a proxy for Team, since Team is not a continuous variable. Yes, we could make variables such as Team numeric, and use it that way, but what woudl a cluster with a mean Team = 2.5 mean? How is an athlete "inbetween" a team? In this way we can get a sense for the Teams while using continuous variables. For example, cluster 3, the only countries that meet this GDP requirement are China and the US, so there is a distinct cluster for the Triathlon data made up of American and Chinese athlete. In fact, if we look at all the GDP values, they are all relatively high, and correspond to countries like Australia, Canada, etc, which tells us that these clusters are all made of athletes from rather rich countries.
+
+Moving on to softball:
+
+```{r soft_clust, results = "markup"}
+get_pca(prcomp(soft))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+# fviz_cluster(kmeans(soft, centers = 1, nstart = 25), geom = "point", data = soft)
+fviz_cluster(kmeans(soft, centers = 2, nstart = 25), geom = "point", data = soft)
+# fviz_cluster(pam(soft, 1), geom = "point")
+fviz_cluster(pam(soft, 2), geom = "point")
+
+soft_o %>%
+  mutate(Cluster = kmeans(soft, centers = 2, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+soft_o %>%
+  mutate(Cluster = pam(soft, 2)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+```
+
+Using $k$=2 wasn't actually too bad! And Kmeans and Kmedoids appears to have recovered very similar centers. Moving on to the Softball data with Population and GDP, technically $k$=3 was for Kmedoids and $k$=6 was for Kmeans, but I will try both cluster sizes for both methods.
+
+```{r softPG_clust, results = "markup"}
+get_pca(prcomp(softPG))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(softPG, centers = 3, nstart = 25), geom = "point", data = softPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 3, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(kmeans(softPG, centers = 6, nstart = 25), geom = "point", data = softPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 7, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(softPG, 3), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 3)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(softPG, 6), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 7)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+```
+
+As we can see, the clusters are all on top of each other. $k$=3 seems to be roughly the same clusters using Kmeans or Kmedoids, but $k$=6 appears to have given very different results depending on the method. I will not print out the means/medoids here, since the clusters are on top of each other and not as distinct. We could investigate what these clusters look like when plotted for the different prinicpal axes:
+
+```{r other_axes, echo = FALSE}
+fviz_cluster(kmeans(softPG, centers = 3, nstart = 25), geom = "point", data = softPG, axes = c(4, 5))
+```
+
+but the clusters are still on top of each other. It appears for some sports adding Population and GDP can help define new clusters, but for other sports, it muddies them. It is possible other clustering methods may reveal clusters not found using Kmeans and Kmedoids.
+
+```{r unload_packages_clust, include = FALSE}
+unloadPkg(rgl)
+unloadPkg(fpc)
+unloadPkg(clustertend)
+unloadPkg(seriation)
+unloadPkg(factoextra)
+unloadPkg(cluster)
+unloadPkg(tidyverse)
+unloadPkg(tidyr)
+unloadPkg(gridExtra)
+unloadPkg(ggplot2)
+unloadPkg(dplyr)
+```
+
+# Logit Regression
+
+## Linear Model
+We added a new column, TMedals, to the Olympic dataset to hold the total number of medals earned for event year. The purpose of this new numeric column is to be able to build linear models. 
+```{r}
+loadPkg(dplyr)
+loadPkg(kableExtra)
+
+
+new_data <- olympic_data %>% filter(Medal.No.Yes == "1") %>% group_by(Year) %>% add_tally(as.numeric(Medal.No.Yes), name="TMedals")
+
+keep_columns <- c( "NOC.Int", "Year", "Decade", "Sex.Int", "Age", "Height", "Sport.Int", "Weight", "BMI", "Population", "GDP", "TMedals")
+new_data <- na.omit(new_data)
+
+new_data_subset <- new_data[keep_columns]
+new_data_subset <- new_data_subset %>% filter(!is.na(Age))
+new_data_subset$Decade <- as.numeric(new_data_subset$Decade)
+
+unloadPkg(dplyr)
+```
+
+```{r cor, eval=FALSE}
+#str(new_data_subset)
+loadPkg(corrplot)
+
+
+olympic_tmedals_cor <- cor(new_data_subset, use="complete.obs")
+corrplot.mixed(olympic_tmedals_cor)
+
+```
+
+Based on the correlation plot, GDP, Population, Height, and Sport.Int are the features with the highest correlation.  Four models will be built, adding each feature to find the best fitted model. We can ignore Year and Decade showing high correlation with total number of medals because the field as created based on the olympic year. 
+
+```{r linear_model, results="markup"}
+loadPkg(dyn)
+model1 = dyn$lm(TMedals ~ GDP, data=new_data)
+sum_md1 = summary(model1)
+#sum_md1
+```
+
+```{r vif_md1}
+vif_md1 = faraway::vif(model1)
+#vif_md1
+```
+
+```{r model2}
+
+model2 = dyn$lm(TMedals ~ GDP + Population, data=new_data)
+sum_md2 = summary(model2)
+#sum_md2
+```
+
+```{r vifmodel2}
+vif_md2 = faraway::vif(model2)
+#vif_md2
+```
+
+```{r model3}
+model3 = dyn$lm(TMedals ~ GDP + Population + Height , data=new_data)
+sum_md3 = summary(model3)
+#sum_md3
+```
+
+```{r vifmodel3}
+vif_md3 = faraway::vif(model3)
+#vif_md3
+```
+
+```{r model4}
+model4 = dyn$lm(TMedals ~ GDP + Population + Height + Sport.Int, data=new_data)
+sum_md4 = summary(model4)
+sum_md4
+```
+
+```{r vifmodel4}
+vif_md4 = faraway::vif(model4)
+#vif_md4
+```
+
+```{r summary_linear_models}
+model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
+m <- c(summary(model1))
+ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
+df <- data.frame(model_names, ar2_values)
+
+names(df) <- c("", "Adjusted R2")
+
+kable(df) %>% kable_styling()
+
+vdf <- data.frame(vif_md2)
+  
+vtable<-  kable(vdf) %>% kable_styling
+xkablevif(model4)
+```
+
+According to the Adjusted $R^2$ value, model 4 is the best fit. The coefficients’ p-values for (Intercept), GDP, Population, Height, and Sport are less than significance level $\alpha$ = 0.05, making them statistically significant. The VIF values for GDP, Population, Height and Sport are greater than 1 but less than 5 so multicollinearity is not an issue with this model. 
+
+```{r anova}
+anova_m <- anova(model1, model2, model3, model4)
+anova_m
+summary(anova_m)
+```
+An Anova test was used to compare the four models. The p-values are less then standard $\alpha$ = 0.05 so the models differ significantly. There is enough variance that you can reject the null hypothesis that the models are the same.
+
+```{r unloadpkg_linear}
+unloadPkg(dyn)
+unloadPkg(kableExtra)
+unloadPkg(xtable)
+```
+## Logit Regression: Factors influencing Earning Olympic Medals
+We used logit regression to model what factors influence the chances of an athlete receiving a medal, `Medal.No.Yes`.
+```{r subset_data_logit}
+loadPkg(dplyr)
+
+
+ol_dt <- olympic_data %>% group_by(Year) %>% add_tally(as.numeric(Medal.No.Yes), name="TMedals")
+
+keep_columns <- c( "NOC.Int", "Sport.Int", "Year", "Decade", "Sex.Int", "Age", "Height", "Weight", "BMI", "Population", "GDP", "Medal.No.Yes", "TMedals")
+ol_dt  <- na.omit(ol_dt)
+
+ol_dt_subset <- ol_dt[keep_columns]
+ol_dt_subset  <- ol_dt_subset %>% filter(!is.na(Age))
+ol_dt_subset $Decade <- as.numeric(ol_dt_subset $Decade)
+
+unloadPkg(dplyr)
+```
+
+
+```{r ggplot}
+
+loadPkg(ggplot2)
+
+ggplot(ol_dt_subset, aes(Age, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(ol_dt_subset, aes(BMI, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(ol_dt_subset, aes(Sex.Int, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(ol_dt_subset, aes(Height, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+ggplot(ol_dt_subset, aes(Sport.Int, fill = Medal.No.Yes)) + geom_density(alpha = 0.2)
+
+```
+
+```{r logit}
+
+olympic_logit <- glm(Medal.No.Yes ~ Sex.Int + Height + Sport.Int, data = ol_dt_subset, binomial(link = "logit"))
+summary(olympic_logit)
+exp(coef(olympic_logit))
+
+
+
+## CIs using standard errors
+confint.default(olympic_logit)
+```
+
+```{r HosmerLemeshow, eval=FALSE}
+
+loadPkg(ResourceSelection) # function hoslem.test( ) for logit model evaluation
+olympic_logit1_Hoslem = hoslem.test(ol_dt_subset$Medal.No.Yes, fitted(olympic_logit)) # Hosmer and Lemeshow test, a chi-squared test
+unloadPkg(ResourceSelection) 
+olympic_logit1_Hoslem
+
+```
+
+```{r AUC}
+loadPkg(pROC) 
+test_prob = predict(olympic_logit, newdata = ol_dt_subset, type = "response")
+test_roc = roc(Medal.No.Yes~test_prob, data=ol_dt_subset, plot = TRUE, print.auc = TRUE)
+
+unloadPkg(pROC)
+```
+```{r McFadden}
+olympic_nulllogit2 <- glm(Medal.No.Yes ~ 1, data = ol_dt_subset, family = "binomial")
+mcFadden = 1 - logLik(olympic_logit)/logLik(olympic_nulllogit2)
+```
+
+```{r McFadden1}
+loadPkg("pscl") # use pR2( ) function to calculate McFadden statistics for model eval
+olympicLogit1pr2 = pR2(olympic_logit)
+#olympicLogit1pr2
+unloadPkg("pscl") 
+```
+
+The McFadden (part of the pseudo-R$^2$ statistics) value of `r round(olympicLogit1pr2['McFadden'], digits=3)` also shows the model is not a particularly great model, with only `r round(olympicLogit1pr2['McFadden']*100, digits=1)`% of the variation explained. 
+
+# KNN
+# Random Forest
+# Pandemic (Spanish Flu)
+With the novel corona virus pandemic this year and its delay of the Olympics in Tokyo this year, we thought it would be interesting to study a last pandemic in the last century and analyze the impact it had on the Olympic performance. The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which was 0.8 percent of the 1910 population. 
+
+```{r loadpackages}
+loadPkg(digest)
+loadPkg(corrplot)
+loadPkg(ggcorrplot)
+loadPkg(ggplot2)
+loadPkg(rmdformats)
+loadPkg(knitr)
+loadPkg(lattice) 
+loadPkg(jtools)
+loadPkg(faraway)
+loadPkg(leaps)
+loadPkg(gridExtra)
+```
+
+```{r read_pandemic_data}
+p_olympics <- read.csv("pandemic_olympics.csv")
+```
+(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.) Taken from [@Johnson2002]
+
+Of the European countries that suffered significant excess deaths during the Spanish Influenza Pandemic, these countries competed before and after 1918-1919: Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA). We created a separate pandemic data set containing athletes from these countries that competed in the Olympics between 1908-1928 to study before and after the pandemic. 
+
+```{r H1N1_pandemic}
+loadPkg(dplyr)
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+Medals <- c("Gold", "Silver", "Bronze")
+
+pandemic_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         Medal %in% Medals) %>% group_by(NOC, Year) %>% tally()
+
+pandemic_NOC_Yr_Mdl$Year <- as.factor(pandemic_NOC_Yr_Mdl$Year)
+unloadPkg(dplyr)
+
+```
+## Medals Earned 
+The plot shows number of medals earned by Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA) before and after the pandemic. There may be more than Gold, Silver or Bronze medals earned by individuals in any sporting event; accounting for the group events.
+```{r plots_num_medals , include=TRUE}
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+
+pandemic_df <- data.frame(pandemic_NOC_Yr_Mdl$NOC, pandemic_NOC_Yr_Mdl$Year, pandemic_NOC_Yr_Mdl$n)
+pandemic_df <- unique(pandemic_df)
+colnames(pandemic_df) <- c("NOC", "Year", "Total.Medals")
+
+pandemic_df$NOC <- as.factor(pandemic_df$NOC)
+
+
+# Basic line plot with points
+ggplot(data=pandemic_df, aes(x=Year, y=Total.Medals, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of medals (n) vs. Year (1908-1928)", x="Year", y="Number of medals (n)") 
+
+
+```
+Great Britain (GBR), Denmark (DEN), Sweden (SWE) saw a decline in the number of medals their athletes earned after the pandemic. The Olympics were not held in 1916 due to World War I. 
+
+## Number of Olympic Athletes
+Looking at the same countries, the plot shows the number of athletes they sent to the Olympics from 1908 - 1928. 
+```{r plots_num_athletes, include=TRUE}
+loadPkg("dplyr")
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+
+p_num_athletes <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF) %>% group_by(NOC, Year) %>% tally(unique(ID))
+
+
+p_num_athletes_df <- data.frame(p_num_athletes$NOC, p_num_athletes$Year, p_num_athletes$n)
+p_num_athletes_df <- unique(p_num_athletes_df)
+colnames(p_num_athletes_df) <- c("NOC", "Year", "Total.Athletes")
+p_num_athletes_df$NOC <- as.factor(p_num_athletes_df$NOC)
+p_num_athletes_df$Year <- as.factor(p_num_athletes_df$Year)
+p_num_athletes_df$V_line <- c("1918") 
+
+
+# Basic line plot with points
+ggplot(data=p_num_athletes_df, aes(x=Year, y=Total.Athletes, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of athletes (n) vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+  
+unloadPkg("dplyr")
+```
+Great Britain and Sweden saw a sharp decline in the number of athletes that they sent to Olympic events after the pandemic. JOHNSON, NIALL P. A. S., and JUERGEN MUELLER reported England & Wales had approximately 200,000 death toll (per 1,000) and Sweden reported 34,374 death toll during the 1918-1919 pandemic. 
+
+## Average Age of Olympians
+The chart displays the average age of Olympians from the eight countries in our data before and after the pandemic.  
+```{r ageSF}
+loadPkg(dplyr)
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+pandemic_avg_age <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         !is.na(Age)) %>% group_by(NOC, Year) %>% summarise(avg=mean(Age))
+
+pandemic_avg_age$Year <- as.factor(pandemic_avg_age$Year)
+
+
+# Basic line plot with points
+ggplot(data=pandemic_avg_age, aes(x=Year, y=avg, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Age vs. Year (1908-1928)", x="Year", y="Avg Age of Athletes (n)")
+```
+The H1N1 Influenza pandemic "Spanish flu" was fatal for individuals aged 20–40 years. The average age of Olympians competing after the pandemic was increased for all countries in our data set.  
+
+## Average Height and Weight of Olympians
+```{r w_h}
+pandemic_avg_hw<- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                        !is.na(Height),
+                                         !is.na(Weight)) %>% group_by(NOC, Year) %>% summarise(avg_h = mean(Height), avg_w = mean(Weight))
+pandemic_avg_hw$Year <- as.factor(pandemic_avg_hw$Year)
+
+
+# Basic line plot with points
+h1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_h, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Height vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+h1
+
+w1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_w, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Weight vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+w1
+
+```
+Netherlands (NED) and Norway (NOR) had significant increase in the average height and weight of their athletes after Spanish flu pandemic. Sweden (SWE) and France (FRA) saw a decrease in those averages. 
+
+
+```{r model1}
+loadPkg(dplyr)
+olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
+
+olympics_medal_count <- olympics_subset %>% group_by(Year) %>% tally(as.numeric(Medal.No.Yes))
+
+p_olympics$Medal.No.Yes <- ifelse(p_olympics$Medal == "Gold" | p_olympics$Medal == "Silver" | p_olympics$Medal == "Bronze",1,0)
+p_olympics$Medal.No.Yes[is.na(p_olympics$Medal.No.Yes)] <- 0
+
+#p_olympics$Medal.No.Yes <- as.factor(p_olympics$Medal.No.Yes)
+
+
+pandemic_total_medals_gold<- p_olympics %>% filter(Medal == "Gold", Season == "Summer") %>% group_by(NOC, Year) %>% tally(Medal.No.Yes)
+#pandemic_total_medals_gold
+pandemic_total_medals_silver<- p_olympics %>% filter(Medal == "Silver", Season == "Summer") %>% group_by(NOC, Year) %>% tally(Medal.No.Yes)
+#pandemic_total_medals_silver
+pandemic_total_medals_bronze<- p_olympics %>% filter(Medal == "Bronze", Season == "Summer") %>% group_by(NOC, Year) %>% tally(Medal.No.Yes)
+#pandemic_total_medals_bronze
+pandemic_total_medals <- p_olympics %>% filter(Medal %in% Medals, Season == "Summer") %>% group_by(NOC, Year) %>% tally(Medal.No.Yes)
+#pandemic_total_medals
+
+df<- data.frame(p_olympics$Medal, p_olympics$Medal.No.Yes)
+
+
+unloadPkg(dplyr)
+```
+
+## Total Number of Olympic Medals (Summer Events) vs. Year 
+```{r }
+loadPkg(dplyr)
+
+olympics_total_medals <- olympic_data %>% filter(Medal %in% Medals, Season == "Summer") %>%
+group_by(NOC, Year) %>% tally(as.numeric(Medal.No.Yes))
+#olympics_total_medals
+
+olympics_summer_medals <- olympic_data %>% filter(Medal %in% Medals, Season == "Summer") %>%
+group_by(Year) %>% tally(as.numeric(Medal.No.Yes))
+colnames(olympics_summer_medals) <- c("Year", "Medals")
+olympics_summer_medals$Year <- as.factor(olympics_summer_medals$Year)
+
+
+
+ITA_Tmedals <- pandemic_total_medals %>% filter(NOC == "ITA")  
+#ITA_Tmedals
+ITA_Tmedals_all <- olympics_total_medals  %>% filter(NOC == "ITA")  
+#ITA_Tmedals_all
+
+
+#histogram of Number of Medals
+loadPkg(ggplot2)
+ggplot(data=olympics_summer_medals, aes(x=Year, y=Medals)) +
+  geom_bar(stat="identity", fill="steelblue")+ylab("Total Number of Medals (Summer Events)") + theme_minimal()
+
+unloadPkg(dplyr)
+```
+
+## Creating Time Series - Italy
+During the 1918 Pandemic, Italy's death toll (per 1,000) was 390,000 death toll. According to [Worldodometer](https://www.worldometers.info/coronavirus/country/italy/), during the current Covid-19 pandemic, there has been 29,079 deaths in Italy. We will focus on Italy to conduct time series analysis. Can we see a pattern with historical Olympic data before and after the Spanish flu in order to predict how Italy will fare in future Olympics after is emerges from the current novel Corona virus pandemic?
+
+The Olympics data for Italy from 1908-1928 was converted to a time series and plotted "Total Number of Medals vs Year". 
+
+```{r forecast}
+
+olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
+olympic_all <- ts(ITA_Tmedals_all$n, start=1908, end = 2016, deltat=4)
+
+ita_olympic <- ts.union(olympic_pts, olympic_all)
+
+
+loadPkg(tidyverse)
+ita_df <- data.frame(ita_olympic)
+ita_df <- ita_df %>% mutate(Num.Medals= if_else(is.na(ita_df$olympic_pts), ita_df$olympic_all,ita_df$olympic_pts ))
+
+ita_df <- subset(ita_df, select = c(Num.Medals))
+
+
+ol_ts <- ts(ita_df,start=1908, end=2016, deltat=4)
+#plot(ol_ts)
+
+autoplot(ol_ts, color="Blue") +
+  ggtitle("Italy in the Olympics: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
+
+olympic_train <- window(ol_ts, start=1908, end = 1928, deltat=4)
+
+olympic_test <- window(ol_ts, start=2008, end = 2016, deltat=4)
+
+
+acf(ol_ts,main="Italy Olympics")
+
+```
+The time series shows random fluctuations in the data over time, no overall trend. The Auto Correlated Function (ACF) plot does not show seasonality, periodicity and cyclic nature of the series. The ACF values are less than 0.05, so they are not significant. So the number of medals may not be correlated to time.
+
+
+## Using 1908-1928 Time Series as Training Data
+From the quick EDA, time series may not be appropriate method to model the number of medals Italy may earn in future Olympics. As a learning academic exercise, we will explore different time series methodologies to forecast. 
+```{r forecast1}
+
+olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
+olympic_all <- ts(ITA_Tmedals_all$n, start=1960, end = 2016, deltat=4)
+
+olympic_train <- window(olympic_pts, start=1908, end = 1928, deltat=4)
+olympic_train1 <- window(ol_ts, start=1960, end = 2008, deltat=4)
+olympic_test <- window(ol_ts, start=2008, end = 2016, deltat=4)
+
+```
+
+## Exploring Holt-Winters and ETS-ANN Time Series Forecasting 
+Holt-Winters uses exponential smoothing to make short-term forecasts. Models is designated as either additive or multiplicative. 
+
+```{r fit}
+fit1.hw <- HoltWinters(x=olympic_train, beta = FALSE,gamma = FALSE) 
+plot(fit1.hw)
+summary(fit1.hw)
+
+fit2.hw <- HoltWinters(x=olympic_train1, beta = FALSE, gamma = FALSE) 
+plot(fit2.hw)
+#summary(fit2.hw)
+
+
+loadPkg(forecast)
+fit1.ets <-ets(olympic_train1, model="ANN")
+#plot(fit1.ets)
+fit1_forecast <- forecast(fit1.ets, h = 3) 
+fit1_forecast
+
+autoplot(fit1_forecast)+
+  ggtitle("ETS Decomposition: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
+
+fit1.hw.forecast <- forecast(fit1.hw, 8)
+
+autoplot(fit1.hw.forecast)+
+  ggtitle("Holt-Winters Forecast 1908-28: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
+fit2.hw.forecast <- forecast(fit2.hw, 8)
+
+autoplot(fit2.hw.forecast)+
+  ggtitle("Holt-Winters Forecast 1960-2008: Number of Medals") +
+  xlab("Year") +
+  ylab("Number of Medals")
+
+
+
+```
+```{r accuracy}
+loadPkg(dplyr)
+ITA_2012 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2012")
+ITA_2016 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2016")
+
+```
+
+## Time Series Linear Model for Italy
+```{r }
+h <- 10
+fit.lin <- tslm(olympic_all ~ trend)
+fcasts.lin <- forecast(fit.lin, h = h)
+fit.exp <- tslm(olympic_all ~ trend, lambda = 0)
+fcasts.exp <- forecast(fit.exp, h = h)
+
+t <- time(olympic_all)
+t.break1 <- 1908
+t.break2 <- 1960
+tb1 <- ts(pmax(0, t - t.break1), start = 1908)
+tb2 <- ts(pmax(0, t - t.break2), start = 1908)
+
+fit.pw <- tslm(olympic_all ~ t + tb1 + tb2)
+t.new <- t[length(t)] + seq(h)
+tb1.new <- tb1[length(tb1)] + seq(h)
+tb2.new <- tb2[length(tb2)] + seq(h)
+
+newdata <- cbind(t=t.new, tb1=tb1.new, tb2=tb2.new) %>%
+  as.data.frame()
+fcasts.pw <- forecast(fit.pw, newdata = newdata)
+
+fit.spline <- tslm(olympic_all ~ t + I(t^2) + I(t^3) +
+  I(tb1^3) + I(tb2^3))
+fcasts.spl <- forecast(fit.spline, newdata = newdata)
+
+autoplot(olympic_all) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fitted(fit.exp), series = "Exponential") +
+  autolayer(fitted(fit.pw), series = "Piecewise") +
+  autolayer(fitted(fit.spline), series = "Cubic Spline") +
+  autolayer(fcasts.pw, series="Piecewise") +
+  autolayer(fcasts.lin, series="Linear", PI=FALSE) +
+  autolayer(fcasts.exp, series="Exponential", PI=FALSE) +
+  autolayer(fcasts.spl, series="Cubic Spline", PI=FALSE) +
+  xlab("Year") + ylab("Number of Medals") +
+  ggtitle("Italy in the Olympics Time Series ") +
+  guides(colour = guide_legend(title = " "))
+
+```
+Above plots try to fit the number of medals to an algorithm that could would best be able to predict the number of Olympic medals Italy will earn after Covid-19 pandemic. Visually, Cubic Spline seems closest in approximation.   
+
+## Arima Model
+```{r arima}
+olympic_arima<- auto.arima(olympic_all, seasonal=FALSE)
+summary(olympic_arima)
+
+olympic_arima %>% forecast(h=10) %>% autoplot(include=8)
+arima_predict <- predict(olympic_arima, n.ahead = 5)
+
+```
+
+The Olympic dat set was divided into a training set (1908-1928) which includes the 1918-1919 Spanish Influenza pandemic and test set (2008-2016). Using MAPE (Mean Absolute Percent Error) measures the size of the error in percentage terms (Taken from [@Stellwagen2011]) to evaluate Holt-Winters and ETS-ANN time series predictions for 2012 and 2016 for Medals won by Italy. The table below show MAPE values less than 10% which is a reasonable model.  
+
+![](MAPE_formula.jpg)
+
+```{r time_series_summary}
+hw_summary <- data.frame(cbind(year = c("2012","2016","2020"),
+                               actual = c(132, 144, NA),
+                              predicted = c(130,130, 130),
+                              mape=c(9.72, 1.53,NA)))
+
+colnames(hw_summary) <- c("Year", "Actual", "Predicted", "MAPE (%)")
+
+hw_summary %>%
+  kable(caption = "Holt-Winters and ETS-ANN Forecast: Italy Olympic Medals") %>%
+  kable_styling()
+
+
+```
+
+ARIMA Time Series model predicts 107 medals for Italy in 2020. We will have to wait until the next Olympics to be able to evaluate the accuracy of these predictions for Italy's performance. 
+
+The analysis of Olympic Medals that Italy earned before and after the 1918-1919 Spanish flu Pandemic and more current data were constructed into a time series on a superficial level. The resulting Olympic time series data on Italy could not be easily decomposed into the main components of a time series: trend, season or irregular fluctations. There are not hidden information we could be deciphered from studying 1918-1919 pandemic that could inform the future after Covid-19.
+
+
+
+
+
+# Trends over time
+# Summary and Conclusion
+# References
+
