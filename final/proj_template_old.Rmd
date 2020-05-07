@@ -1,0 +1,423 @@
+---
+title: "Olympic Data"
+author: "team 010100"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmdformats::readthedown:
+    css: styles.css
+    highlight: kate
+    code_folding: hide
+    number_sections: yes
+    keep_tex: yes
+    includes:
+        after_body: github.html
+bibliography: bibliography.bib
+csl: american-institute-of-physics.csl
+---
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r setup, echo=FALSE, cache=FALSE}
+loadPkg(knitr)
+loadPkg(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+# Introduction
+Team 010100 are the following members: Izzy Illari, Lucia Illari, Omar Qusous, and Lydia Teinfalt. You may find our work over on [GitHub](https://github.com/IzzyIllari/DATS-Model-Proj).
+
+For the second portion of our group project, we kept Olympics data from the EDA. Our SMART questions were `What factors can be used to model the probability of being awarded a medal?` What groups/clusters do athletes of different sports fall into? How does a pandemic affect the medals awarded? How can the evolution of athlete characteristics over time be modelled? With these questions in mind we went to see if we could find use the data on Olympians to find patterns and create models that could answer the questions.
+
+We used a dataset called `120 years of Olympic history: athletes and results` on Kaggle over here: [https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results](https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results). This historical dataset includes all Olympic Games from Athens 1896 to Rio 2016, which was scraped from [https://www.sports-reference.com/](https://www.sports-reference.com/). We focused on data from Olympic events 1960-2016 when looking at clustering, Kmeans, Linear and Logit Regression and trends over time. For the pandemic analysis, we focused on data of Olympics participating in events before and after the H1N1 Pandemic from 1918-1919.   
+
+The report is organized as follows:
+
+1. Summary of Dataset
+2. Data Prep
+3. EDA
+4. Clustering, Kmeans, Kmedoids 
+5. Linear and Logit Regression
+6. Random Forest
+7. Pandemic (Spanish Flu)
+8. Trends over time
+9. Summary and Conclusion
+10. References
+
+# Summary of Dataset
+The data looks like the following:
+
+```{r xkablesummary, include = FALSE}
+loadPkg(xtable)
+loadPkg(kableExtra)
+loadPkg(stringi)
+
+xkabledply = function(smmry, title='Caption', pos='left') { # Thanks Ryan Longmuir for the codes
+  smmry %>%
+    xtable() %>% 
+    kable(caption = title, digits = 4) %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = pos)
+}
+
+xkablesummary = function(df) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #` If the categorical variables has less than 6 levels, the function will still run without error.
+  #' ELo 202003 GWU DATS
+  #' version 1
+  #' @param df The dataframe.
+  #' @return The summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  s %>%
+    xkabledply("Table: Statistics summary.", "center")
+
+}
+```
+
+```{r import_data}
+olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$ID <- as.factor(olympic_data$ID)
+olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
+olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
+#head(olympic_data)
+str(olympic_data)
+```
+
+The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_data)` rows/entries, for a total of `r ncol(olympic_data)*nrow(olympic_data)` individual data points. In `olympic_data` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
+
+1. ID: Unique number for each athlete
+2. Name: Athlete's name
+3. Sex: M or F
+4. Age: Integer
+5. Height: centimeters
+6. Weight: kilograms
+7. Team: Team name
+8. NOC: National Olympic Committee 3-letter code
+9. Games: Year and season
+10. Year: Integer
+11. Season: Summer or Winter
+12. City: Host city
+13. Sport
+14. Event
+15. Medal: Gold, Silver, Bronze, or NA
+
+To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs were also removed. We have modified the data from the kaggle dataset from which it was originally taken. The dataset now starts at 1960 and includes the new following variables:
+
+1. Decade (factor)
+2. First name (factor)
+3. Last name (factor)
+4. BMI (numeric)
+5. BMI category (factor)
+6. Population (numeric)
+7. GDP (numeric)
+8. GDPpC (numeric)
+9. Medal: Yes or No (factor)
+
+How many empty responses are there in the data? We can quickly visualize it before omitting the NA responses.
+
+```{r remove_NAs, echo = FALSE}
+olympic.data <- olympic_data
+
+loadPkg(VIM)
+aggr(olympic.data)
+unloadPkg(VIM)
+
+olympic_data_noNA <- na.omit(olympic_data)
+olympic_data <- olympic_data_noNA
+data_sport <- split(olympic_data_noNA, olympic_data_noNA$Sport)
+```
+
+
+# EDA
+For EDA, we can do a quick summary to just look at the data.
+
+```{r keep, results = "markup"}
+xkablesummary(olympic_data)
+
+# loadPkg(psych)
+# pairs.panels(olympic_data[,-length(olympic_data)], 
+#              method = "pearson",
+#              hist.col = "#CCFF66",
+#              density = TRUE,
+#              ellipses = TRUE
+#              )
+# unloadPkg(psych)
+
+olympic_data$Sex.Int <- c(as.numeric(as.factor(olympic_data$Sex)))
+olympic_data$NOC.Int <- c(as.numeric(as.factor(olympic_data$NOC)))
+olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
+```
+
+
+# Olympics Correlation plot
+
+Just quickly visualizing teh correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are noturally going to be highly correlated.
+
+```{r subset_corr, echo = FALSE}
+loadPkg("dplyr")
+olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
+unloadPkg("dplyr")
+
+loadPkg("corrplot")
+cols.num <- c(1:length(olympic.data))
+num.df <- olympic.data
+num.df[cols.num] <- sapply(olympic.data[cols.num],as.numeric)
+cor.all <- cor(num.df[,c(1,2,8:13,15:17,24)], use="pairwise.complete.obs")
+cmat.all <- corrplot(cor.all, method="pie", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+unloadPkg("corrplot")
+```
+
+It might be more useful to focus in on the correlations for only the variable Medal.No.Yes and Medal:
+
+```{r focus_corr, results = "markup"}
+loadPkg(corrr)
+loadPkg(plyr)
+
+cor.medNY <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal.No.Yes)
+cor.medNY[order(cor.medNY$Medal.No.Yes, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+cor.medal <- focus(correlate(num.df, use="pairwise.complete.obs"), Medal)
+cor.medal[order(cor.medal$Medal, decreasing = TRUE),] %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+unloadPkg(corrr)
+unloadPkg(plyr)
+```
+
+Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off teh strength of the correlations.
+
+# Clustering, Kmeans, Kmedoids 
+
+Let's turn to look at unsupervised machine learning, such as clustering. We have no target output in this case, and we are just trying to conclude something meaningful about the dataset. Kmeans requires continuous data, set we will work with the original numeric columns present in the data set - Age, Weight, and Height - and then we will also incorporate the numeric columns which we added to the data, namely Population and GDP. Before I get into the clustering, let's first do a 3D scatter plot of this data, using only the three numerical columns originally present in the data.
+
+```{r 3d_scatter, results = "markup"}
+loadPkg(plot3D)
+tri.df <- subset(olympic_data, Sport == "Triathlon")[,c(9:11)]
+scatter3D(tri.df[,1], tri.df[,2], tri.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Triathlon", ticktype = "detailed")
+unloadPkg(plot3D)
+```
+
+It's important to remove any missing values that might be present in the data, and then to standardize the data. This makes it so the variables are comparable. Standardization consists of transforming the variables such that they have zero mean and standard deviation one.
+
+```{r clustering_datasets, include = FALSE}
+triPG <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight", "Population", "GDP")]
+triPG_o <- triPG
+triPG_o <- triPG_o[complete.cases(triPG_o), ]
+triPG_o <- na.omit(triPG_o)
+triPG <- triPG[complete.cases(triPG), ]
+triPG <- na.omit(triPG) #to remove any missing value that might be present in the data
+triPG <- scale(triPG)
+#data must be standardized to make variables comparable; consists of transforming the variables such that they have mean zero and standard deviation one
+
+tri <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight")]
+tri_o <- tri
+tri_o <- tri_o[complete.cases(tri_o), ]
+tri_o <- na.omit(tri_o)
+tri <- tri[complete.cases(tri), ]
+tri <- na.omit(tri)
+tri <- scale(tri)
+```
+
+# Logit Regression
+# KNN
+# Random Forest
+# Pandemic (Spanish Flu)
+The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which  was 0.8 percent of the 1910 population. 
+
+```{r loadpackages}
+loadPkg("digest")
+loadPkg("corrplot")
+loadPkg("ggcorrplot")
+loadPkg("ggplot2")
+loadPkg("rmdformats")
+loadPkg("knitr")
+loadPkg("lattice") 
+loadPkg("jtools")
+loadPkg("faraway")
+loadPkg("leaps")
+loadPkg("gridExtra")
+```
+
+```{r read_pandemic_data}
+p_olympics <- read.csv("pandemic_olympics.csv")
+```
+(JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.)
+
+```{r H1N1_pandemic}
+loadPkg("dplyr")
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+Medals <- c("Gold", "Silver", "Bronze")
+
+pandemic_NOC_Yr_Mdl <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         Medal %in% Medals) %>% group_by(NOC, Year) %>% tally()
+
+pandemic_NOC_Yr_Mdl$Year <- as.factor(pandemic_NOC_Yr_Mdl$Year)
+unloadPkg("dplyr")
+
+```
+
+
+```{r plots_num_medals , include=TRUE}
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+
+pandemic_df <- data.frame(pandemic_NOC_Yr_Mdl$NOC, pandemic_NOC_Yr_Mdl$Year, pandemic_NOC_Yr_Mdl$n)
+pandemic_df <- unique(pandemic_df)
+colnames(pandemic_df) <- c("NOC", "Year", "Total.Medals")
+
+pandemic_df$NOC <- as.factor(pandemic_df$NOC)
+
+
+
+# Basic line plot with points
+ggplot(data=pandemic_df, aes(x=Year, y=Total.Medals, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of medals (n) vs. Year (1908-1928)", x="Year", y="Number of medals (n)") 
+
+
+```
+
+```{r plots_num_athletes, include=TRUE}
+loadPkg("dplyr")
+NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
+
+p_num_athletes <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF) %>% group_by(NOC, Year) %>% tally(ID)
+
+
+p_num_athletes_df <- data.frame(p_num_athletes$NOC, p_num_athletes$Year, p_num_athletes$n)
+p_num_athletes_df <- unique(p_num_athletes_df)
+colnames(p_num_athletes_df) <- c("NOC", "Year", "Total.Athletes")
+p_num_athletes_df$NOC <- as.factor(p_num_athletes_df$NOC)
+p_num_athletes_df$Year <- as.factor(p_num_athletes_df$Year)
+p_num_athletes_df$V_line <- c("1918") 
+
+
+# Basic line plot with points
+ggplot(data=p_num_athletes_df, aes(x=Year, y=Total.Athletes, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+#  scale_colour_manual(values = NOC_colors) +
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Num of athletes (n) vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+  
+unloadPkg("dplyr")
+```
+
+
+```{r ageSF}
+loadPkg(dplyr)
+NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
+
+pandemic_avg_age <- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                         !is.na(Age)) %>% group_by(NOC, Year) %>% summarise(avg=mean(Age))
+
+pandemic_avg_age$Year <- as.factor(pandemic_avg_age$Year)
+
+
+# Basic line plot with points
+ggplot(data=pandemic_avg_age, aes(x=Year, y=avg, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Age vs. Year (1908-1928)", x="Year", y="Number of Athletes (n)")
+```
+
+
+```{r w_h}
+pandemic_avg_hw<- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
+                                         NOC %in% NOC_SF,
+                                        !is.na(Height),
+                                         !is.na(Weight)) %>% group_by(NOC, Year) %>% summarise(avg_h = mean(Height), avg_w = mean(Weight))
+pandemic_avg_hw$Year <- as.factor(pandemic_avg_hw$Year)
+
+
+# Basic line plot with points
+h1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_h, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Height vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+h1
+
+w1 <- ggplot(data=pandemic_avg_hw, aes(x=Year, y=avg_w, group=NOC, color=NOC)) +
+  geom_line(size=1)+
+   geom_vline(xintercept = 1918) +
+  geom_point()+
+ theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 9, hjust = 1),
+        axis.text.y = element_text(vjust = 1, size = 9),
+        panel.border = element_rect(color = "black", fill=NA, size=1)) +
+  labs(title="H1N1 Pademic: Average Weight vs. Year (1908-1928)", x="Year", y="Avg Height (cm)")
+w1
+
+```
+
+# Trends over time
+# Summary and Conclusion
+# References
+

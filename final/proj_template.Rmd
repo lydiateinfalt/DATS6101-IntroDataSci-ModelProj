@@ -33,7 +33,6 @@ unloadPkg = function(pkg, character.only = FALSE) {
 }
 ```
 
-
 ```{r setup, echo=FALSE, cache=FALSE}
 loadPkg(knitr)
 loadPkg(rmdformats)
@@ -132,7 +131,6 @@ xkablevif = function(model) {
     kable_styling(bootstrap_options = "striped", full_width = F,
     position = "left")
 }
-
 ```
 
 ```{r import_data}
@@ -251,6 +249,277 @@ unloadPkg(plyr)
 Unless you ignore the athletes that didn't receive a medal, building a general model from the variable Medal.No.Yes might be a better idea, based off the strength of the correlations.
 
 # Clustering, Kmeans, Kmedoids 
+
+My first thought was to do some clustering with just the numeric columns originally present in the data, namely Age, Weight, and Height, so I decided to look at some 3D scatter plots.
+
+```{r 3d_scatter, echo = FALSE}
+loadPkg(plot3D)
+par(mfrow=c(1,2))
+soft.df <- subset(olympic.data, Sport == "Softball")[,c(9:11)]
+scatter3D(soft.df[,1], soft.df[,2], soft.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Softball", ticktype = "detailed")
+
+tri.df <- subset(olympic.data, Sport == "Triathlon")[,c(9:11)]
+scatter3D(tri.df[,1], tri.df[,2], tri.df[,3],colkey = FALSE, bty ="g", xlab = "Age (years)",
+          ylab ="Height (cm)", zlab = "Weight (kg)", main = "Triathlon", ticktype = "detailed")
+unloadPkg(plot3D)
+```
+
+So we are indeed seeing different behavior with these two sports - Triathlon appears more spread out but Softball appears to mostly clustered around lower ages. Well first thing's first, before we just go ahead seeing what clusters there are, we should calculate the Hopkin's Statistic. We can conduct the Hopkins Statistic test iteratively, using 0.5 as the threshold to reject the alternative hypothesis. That is, if H < 0.5, then it is unlikely that D has statistically significant clusters. Put in other words, If the value of Hopkins statistic is close to 1, then we can reject the null hypothesis and conclude that the dataset D is significantly a clusterable data. We need to make sure to remove NAs and scale the variables to make them comparable. Scaling consists of transforming the variables such that they have mean zero and standard deviation one.
+
+```{r useful_packages_clust, include = FALSE}
+loadPkg(dplyr)
+loadPkg(tidyverse)
+loadPkg(ggplot2)
+loadPkg(cluster)
+loadPkg(factoextra)
+loadPkg(seriation)
+loadPkg(fpc)
+#loadPkg(rgl)
+loadPkg(gridExtra)
+loadPkg(clustertend)
+```
+
+```{r prep, echo = FALSE}
+triPG <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight", "Population", "GDP")]
+triPG_o <- triPG
+triPG_o <- triPG_o[complete.cases(triPG_o), ]
+triPG_o <- na.omit(triPG_o)
+triPG <- triPG[complete.cases(triPG), ]
+triPG <- na.omit(triPG) #to remove any missing value that might be present in the data
+triPG <- scale(triPG)
+#data must be standardized to make variables comparable; consists of transforming the variables such that they have mean zero and standard deviation one
+
+tri <- subset(olympic_data, Sport == "Triathlon")[,c("Age", "Height", "Weight")]
+tri_o <- tri
+tri_o <- tri_o[complete.cases(tri_o), ]
+tri_o <- na.omit(tri_o)
+tri <- tri[complete.cases(tri), ]
+tri <- na.omit(tri)
+tri <- scale(tri)
+
+softPG <- subset(olympic_data, Sport == "Softball")[,c("Age", "Height", "Weight", "Population", "GDP")]
+softPG_o <- softPG
+softPG_o <- softPG_o[complete.cases(softPG_o), ]
+softPG_o <- na.omit(softPG_o)
+softPG <- softPG[complete.cases(softPG), ]
+softPG <- na.omit(softPG)
+softPG <- scale(softPG)
+
+soft <- subset(olympic_data, Sport == "Softball")[,c("Age", "Height", "Weight")]
+soft_o <- soft
+soft_o <- soft_o[complete.cases(soft_o), ]
+soft_o <- na.omit(soft_o)
+soft <- soft[complete.cases(soft), ]
+soft <- na.omit(soft)
+soft <- scale(soft)
+```
+
+```{r hopkins, results = "markup"}
+set.seed(123)
+print("Triathlon without Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(tri, n = nrow(tri)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Triathlon with Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(triPG, n = nrow(triPG)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Softball without Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(soft, n = nrow(soft)-1, graph = FALSE)$hopkins_stat, "\n")
+
+print("Softball with Population and GDP")
+cat("Hopkins Statistic H =", get_clust_tendency(softPG, n = nrow(softPG)-1, graph = FALSE)$hopkins_stat, "\n")
+```
+
+Clearly all of these values are greater than 0.5, so there are statistically significant clusters present. Of course, Kmeans (and Kmedoids) requires us to specify "how many $k$, i.e., clusters?" We can use the elbow method, the silhouette method, and the gap statistic to get an idea for how many $k$ we should be specifying.
+
+```{r num_k_tri, echo = FALSE}
+set.seed(123)
+
+tk_k1 <- fviz_nbclust(tri, kmeans, method = "wss")
+tk_k2 <- fviz_nbclust(tri, kmeans, method = "silhouette")
+tk_k3 <- fviz_nbclust(tri, kmeans, method = "gap_stat")
+tk_p1 <- fviz_nbclust(tri, pam, method = "wss")
+tk_p2 <- fviz_nbclust(tri, pam, method = "silhouette")
+tk_p3 <- fviz_nbclust(tri, pam, method = "gap_stat")
+
+grid.arrange(tk_k1,tk_k2, tk_k3, top = "Clusters with Kmeans for Triathlon, without Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tk_p1,tk_p2, tk_p3, top = "Clusters with Kmedoids for Triathlon, without Population and GDP", ncol = 1, nrow = 3)
+
+tpgk_k1 <- fviz_nbclust(triPG, kmeans, method = "wss")
+tpgk_k2 <- fviz_nbclust(triPG, kmeans, method = "silhouette")
+tpgk_k3 <- fviz_nbclust(triPG, kmeans, method = "gap_stat")
+tpgk_p1 <- fviz_nbclust(triPG, pam, method = "wss")
+tpgk_p2 <- fviz_nbclust(triPG, pam, method = "silhouette")
+tpgk_p3 <- fviz_nbclust(triPG, pam, method = "gap_stat")
+
+grid.arrange(tpgk_k1,tpgk_k2, tpgk_k3, top = "Clusters with Kmeans for Triathlon, with Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(tpgk_p1,tpgk_p2, tpgk_p3, top = "Clusters with Kmedoids for Triathlon, with Population and GDP", ncol = 1, nrow = 3)
+```
+
+For the Triathlon data with only variables Age, Height, and Weight, for Kmeans and Kmedoids, we'll try $k$=2, and for the Triathlon data that additionally has Population and GDP, we'll try $k$=3 and $k$=7.
+
+```{r num_k_soft, echo = FALSE}
+sk_k1 <- fviz_nbclust(soft, kmeans, method = "wss")
+sk_k2 <- fviz_nbclust(soft, kmeans, method = "silhouette")
+sk_k3 <- fviz_nbclust(soft, kmeans, method = "gap_stat")
+sk_p1 <- fviz_nbclust(soft, pam, method = "wss")
+sk_p2 <- fviz_nbclust(soft, pam, method = "silhouette")
+sk_p3 <- fviz_nbclust(soft, pam, method = "gap_stat")
+
+grid.arrange(sk_k1,sk_k2, sk_k3, top = "Clusters with Kmeans for Softball, without Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(sk_p1,sk_p2, sk_p3, top = "Clusters with Kmedoids for Softball, without Population and GDP", ncol = 1, nrow = 3)
+
+spgk_k1 <- fviz_nbclust(softPG, kmeans, method = "wss")
+spgk_k2 <- fviz_nbclust(softPG, kmeans, method = "silhouette")
+spgk_k3 <- fviz_nbclust(softPG, kmeans, method = "gap_stat")
+spgk_p1 <- fviz_nbclust(softPG, pam, method = "wss")
+spgk_p2 <- fviz_nbclust(softPG, pam, method = "silhouette")
+spgk_p3 <- fviz_nbclust(softPG, pam, method = "gap_stat")
+
+grid.arrange(spgk_k1,spgk_k2, spgk_k3, top = "Clusters with Kmeans for Softball, with Population and GDP", ncol = 1, nrow = 3)
+grid.arrange(spgk_p1,spgk_p2, spgk_p3, top = "Clusters with Kmedoids for Softball, with Population and GDP", ncol = 1, nrow = 3)
+```
+
+This is interesting for the Softbll. Though according to the Hopkin's statistic there were statistically significant clusters, $k$=1 keeps being suggested. There is likely to be a lot of overlapping data points in the clusters when $k\geq$2. I can try $k$=2 for Softball with only Age, Weight, and Height, and $k$=3 for Kmedoids and $k$=6 for Kmeans for Population and GDP in addition.
+
+```{r tri_clust, results = "markup"}
+get_pca(prcomp(tri))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(tri, centers = 2, nstart = 25), geom = "point", data = tri)
+fviz_cluster(pam(tri, 2), geom = "point")
+
+loadPkg(dplyr)
+loadPkg(tidyr)
+loadPkg(tidyverse)
+
+tri_o %>%
+  mutate(Cluster = kmeans(tri, centers = 2, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+tri_o %>%
+  mutate(Cluster = pam(tri, 2)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+```
+
+I will only print out the means for the clustering here with the most distinct clusters, which is $k$=3 using Kmeans.
+
+```{r triPG_clust, results = "markup"}
+get_pca(prcomp(triPG))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(triPG, centers = 3, nstart = 25), geom = "point", data = triPG)
+triPG_o %>%
+  mutate(Cluster = kmeans(triPG, centers = 3, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+fviz_cluster(kmeans(triPG, centers = 7, nstart = 25), geom = "point", data = triPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 7, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(triPG, 3), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 3)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(triPG, 7), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 7)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+```
+
+We use Population and GDP here as a proxy for Team, since Team is not a continuous variable. Yes, we could make variables such as Team numeric, and use it that way, but what woudl a cluster with a mean Team = 2.5 mean? How is an athlete "inbetween" a team? In this way we can get a sense for the Teams while using continuous variables. For example, cluster 3, the only countries that meet this GDP requirement are China and the US, so there is a distinct cluster for the Triathlon data made up of American and Chinese athlete. In fact, if we look at all the GDP values, they are all relatively high, and correspond to countries like Australia, Canada, etc, which tells us that these clusters are all made of athletes from rather rich countries.
+
+Moving on to softball:
+
+```{r soft_clust, results = "markup"}
+get_pca(prcomp(soft))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+# fviz_cluster(kmeans(soft, centers = 1, nstart = 25), geom = "point", data = soft)
+fviz_cluster(kmeans(soft, centers = 2, nstart = 25), geom = "point", data = soft)
+# fviz_cluster(pam(soft, 1), geom = "point")
+fviz_cluster(pam(soft, 2), geom = "point")
+
+soft_o %>%
+  mutate(Cluster = kmeans(soft, centers = 2, nstart = 25)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+soft_o %>%
+  mutate(Cluster = pam(soft, 2)$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+```
+
+Using $k$=2 wasn't actually too bad! And Kmeans and Kmedoids appears to have recovered very similar centers. Moving on to the Softball data with Population and GDP, technically $k$=3 was for Kmedoids and $k$=6 was for Kmeans, but I will try both cluster sizes for both methods.
+
+```{r softPG_clust, results = "markup"}
+get_pca(prcomp(softPG))$contrib %>%
+  kable("html", align = 'cccc') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),full_width = T)
+
+fviz_cluster(kmeans(softPG, centers = 3, nstart = 25), geom = "point", data = softPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 3, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(kmeans(softPG, centers = 6, nstart = 25), geom = "point", data = softPG)
+# triPG_o %>%
+#   mutate(Cluster = kmeans(triPG, centers = 7, nstart = 25)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(softPG, 3), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 3)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+
+fviz_cluster(pam(softPG, 6), geom = "point")
+# triPG_o %>%
+#   mutate(Cluster = pam(triPG, 7)$cluster) %>%
+#   group_by(Cluster) %>%
+#   summarise_all("mean")
+```
+
+As we can see, the clusters are all on top of each other. $k$=3 seems to be roughly the same clusters using Kmeans or Kmedoids, but $k$=6 appears to have given very different results depending on the method. I will not print out the means/medoids here, since the clusters are on top of each other and not as distinct. We could investigate what these clusters look like when plotted for the different prinicpal axes:
+
+```{r other_axes, echo = FALSE}
+fviz_cluster(kmeans(softPG, centers = 3, nstart = 25), geom = "point", data = softPG, axes = c(4, 5))
+```
+
+but the clusters are still on top of each other. It appears for some sports adding Population and GDP can help define new clusters, but for other sports, it muddies them. It is possible other clustering methods may reveal clusters not found using Kmeans and Kmedoids.
+
+```{r unload_packages_clust, include = FALSE}
+#unloadPkg(rgl)
+unloadPkg(fpc)
+unloadPkg(clustertend)
+unloadPkg(seriation)
+unloadPkg(factoextra)
+unloadPkg(gclus)
+unloadPkg(cluster)
+unloadPkg(tidyverse)
+unloadPkg(broom)
+unloadPkg(tidyr)
+unloadPkg(viridis)
+unloadPkg(gridExtra)
+unloadPkg(ggcorrplot)
+unloadPkg(ggplot2)
+unloadPkg(dplyr)
+```
+
 # Logit Regression
 
 ## Linear Model
@@ -289,18 +558,14 @@ loadPkg(dyn)
 model1 = dyn$lm(TMedals ~ GDP, data=new_data)
 sum_md1 = summary(model1)
 #sum_md1
-
-
 ```
 
 ```{r vif_md1}
-
 vif_md1 = faraway::vif(model1)
 #vif_md1
 ```
 
 ```{r model2}
-
 model2 = dyn$lm(TMedals ~ GDP + Population, data=new_data)
 sum_md2 = summary(model2)
 #sum_md2
@@ -322,12 +587,10 @@ vif_md3 = faraway::vif(model3)
 #vif_md3
 ```
 
-
 ```{r model4}
 model4 = dyn$lm(TMedals ~ GDP + Population + Height + Sport.Int, data=new_data)
 sum_md4 = summary(model4)
 sum_md4
-
 ```
 
 ```{r vifmodel4}
@@ -335,46 +598,37 @@ vif_md4 = faraway::vif(model4)
 #vif_md4
 ```
 
-
 ```{r summary_linear_models}
-
-
-model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
-m <- c(summary(model1))
-ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
-df <- data.frame(model_names, ar2_values)
-
-names(df) <- c("", "Adjusted R2")
-
-kable(df) %>% kable_styling()
-
-vdf <- data.frame(vif_md2)
-  
-vtable<-  kable(vdf) %>% kable_styling
-xkablevif(model4)
-
-
+# model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
+# m <- c(summary(model1))
+# ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
+# df <- data.frame(model_names, ar2_values)
+# 
+# names(df) <- c("", "Adjusted R2")
+# 
+# kable(df) %>% kable_styling()
+# 
+# vdf <- data.frame(vif_md2)
+#    
+# vtable<-  kable(vdf) %>% kable_styling
+# xkablevif(model4)
 ```
 
 According to the Adjusted $R^2$ value, model 4 is the best fit. The coefficients’ p-values for (Intercept), GDP, Population, Height, and Sport are less than significance level $\alpha$ = 0.05, making them statistically significant. The VIF values for GDP, Population, Height and Sport are greater than 1 but less than 5 so multicollinearity is not an issue with this model. 
 
 ```{r anova}
-
-
 anova_m <- anova(model1, model2, model3, model4)
 anova_m
 summary(anova_m)
-
 ```
 An Anova test was used to compare the four models. The p-values are less then standard $\alpha$ = 0.05 so the models differ significantly. There is enough variance that you can reject the null hypothesis that the models are the same.
-
-
 
 ```{r unloadpkg_linear}
 unloadPkg(dyn)
 unloadPkg(kableExtra)
 unloadPkg(xtable)
 ```
+
 ## Logit Regression: Factors influencing Earning Olympic Medals
 We used logit regression to model what factors influence the chances of an athlete receiving a medal, `Medal.No.Yes`.
 ```{r subset_data_logit}
@@ -451,6 +705,193 @@ unloadPkg("pscl")
 ```
 
 The McFadden (part of the pseudo-R$^2$ statistics) value of `r round(olympicLogit1pr2['McFadden'], digits=3)` also shows the model is not a particularly great model, with only `r round(olympicLogit1pr2['McFadden']*100, digits=1)`% of the variation explained. 
+
+## Logistic Regression: Medal.No.Yes variable
+
+```{r remove_missing_factors, echo = FALSE}
+#source of code: https://stackoverflow.com/a/44316204/8902095
+remove_missing_levels <- function(fit, test_data) {
+  test_data %>%
+    droplevels() %>%
+    as.data.frame() -> test_data
+
+  if (any(class(fit) == "glmmPQL")) {
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "",
+                     names(unlist(fit$contrasts))))
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    map(fit$contrasts, function(x) names(unmatrix(x))) %>%
+      unlist() -> factor_levels
+    factor_levels %>% str_split(":", simplify = TRUE) %>%
+      extract(, 1) -> factor_levels
+
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+  } else {
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "",
+                     names(unlist(fit$xlevels))))
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    factor_levels <- unname(unlist(fit$xlevels))
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+  }
+
+  predictors <- names(test_data[names(test_data) %in% factors])
+
+  for (i in 1:length(predictors)) {
+    found <- test_data[, predictors[i]] %in% model_factors[
+      model_factors$factors == predictors[i], ]$factor_levels
+    if (any(!found)) {
+      var <- predictors[i]
+      test_data[!found, predictors[i]] <- NA
+      test_data %>%
+        droplevels() -> test_data
+      message(sprintf(paste0("Setting missing levels in '%s', only present",
+                             " in test data but missing in train data,",
+                             " to 'NA'."),
+                      var))
+    }
+  }
+  return(test_data)
+}
+```
+
+Now we have already looked at the correlation matrix for the entire dataset, and it looks like Medal.No.Yes might have some stronger correlations than Medal. We’ll be attempting to use the entire dataset for logistic regression to see what variables go into predicting whether an athlete is awarded a medal or not.
+
+```{r glm_all, results = "markup"}
+glm.all <- glm(Medal.No.Yes ~ GDP + Height + Weight + Population + Sport, data = olympic.data, binomial(link = "logit"))
+summary(glm.all)
+
+glm.data <- remove_missing_levels (fit = glm.all, test_data = olympic.data)
+
+loadPkg(regclass)
+regclass::confusion_matrix(glm.all)
+
+loadPkg(pscl)
+pR2(glm.all)["McFadden"]
+
+loadPkg(pROC)
+prob = predict(glm.all, newdata = glm.data, type = "response")
+glm.data$prob = prob
+h <- roc(Medal.No.Yes~prob, data = glm.data)
+plot(h)
+pROC::auc(h)
+```
+
+Team was not included because it was not significant however the overall model is significant. For the area under the curve, it is `r pROC::auc(h)>=0.8` that it is more than 0.8, so this is not a good model. The true negative percentage was `r regclass::confusion_matrix(glm.all)[1]/(regclass::confusion_matrix(glm.all)[1]+regclass::confusion_matrix(glm.all)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.all)[5]/(regclass::confusion_matrix(glm.all)[2]+regclass::confusion_matrix(glm.all)[5])*100`% so it appears that the model is mostly labelling everything as not receiving a medal. 
+
+Let’s try doing a model for Basketball, one of the more popular sports by athlete counts. Now I’m going to include Age, Weight, and Height and first, but there is something interesting that happens:
+
+```{r basketball_fit_awh, results = "markup"}
+basket1 <- subset(olympic.data, Sport == "Basketball")
+glm.b <- glm(Medal.No.Yes ~ Age + Weight + Height + GDP + Population + Team, data = basket1, binomial(link = "logit"))
+summary(glm.b)
+
+basket3 <- remove_missing_levels (fit = glm.b, test_data = basket1)
+
+pR2(glm.b)["McFadden"]
+
+regclass::confusion_matrix(glm.b)
+
+prob = predict(glm.b, newdata = basket3, type = "response")
+basket3$prob = prob
+h.b <- roc(Medal.No.Yes~prob, data = basket3)
+plot(h.b)
+pROC::auc(h.b)
+```
+
+Looking at this, we see that the variables Age, Height, and Weight are not significant, but GDP, Population, and Team are! Let’s go ahead and see what the model looks like without these variables…
+
+```{r basketball_fit, results = "markup"}
+glm.b1 <- glm(Medal.No.Yes ~ GDP + Population + Team, data = basket1, binomial(link = "logit"))
+summary(glm.b1)
+
+basket31 <- remove_missing_levels (fit = glm.b1, test_data = basket1)
+
+pR2(glm.b1)["McFadden"]
+
+regclass::confusion_matrix(glm.b1)
+
+prob1 = predict(glm.b1, newdata = basket31, type = "response")
+basket31$prob = prob1
+h.b1 <- roc(Medal.No.Yes~prob1, data = basket31)
+plot(h.b1)
+pROC::auc(h.b1)
+```
+
+The area under the curve is hardly affected - it’s a `r abs(pROC::auc(h.b1)-pROC::auc(h.b))` difference! Moreover, the model with just GDP, Population, and Team is an overall significant model, and it is `r pROC::auc(h.b1)>=0.8` that the area under the curve is more than 0.8. In fact, the area under the curve is `r abs(pROC::auc(h.b1)-1)` away from being 1, so this would appear to be a very good model. The true negative percentage was `r regclass::confusion_matrix(glm.b1)[1]/(regclass::confusion_matrix(glm.b1)[1]+regclass::confusion_matrix(glm.b1)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.b1)[5]/(regclass::confusion_matrix(glm.b1)[2]+regclass::confusion_matrix(glm.b1)[5])*100`% so this model is much better at predicting when an athlete will recieve a medal. Of course, we would like to see the TP value be higher, but it is interesting how Basketball is a sport that can be modelled by variables related to the country the athletes come from, rather than characteristics describing the athletes themselves…
+
+Softball (and Baseball) were removed from the Olympics because the USA and Japan dominated the sport at the Olympics, let's see what variables affect the logistical regression model for Softball then.
+
+```{r softball_fit_awh, results = "markup"}
+soft <- subset(olympic.data, Sport == "Softball")
+glm.s1 <- glm(Medal.No.Yes ~ Age + Weight + Height + GDP + Population + Team, data = soft, binomial(link = "logit"))
+summary(glm.s1)
+
+soft.s1 <- remove_missing_levels (fit = glm.s1, test_data = soft)
+
+pR2(glm.s1)["McFadden"]
+
+regclass::confusion_matrix(glm.s1)
+
+prob.s1 = predict(glm.s1, newdata = soft.s1, type = "response")
+soft.s1$prob.s1 = prob.s1
+h.s1 <- roc(Medal.No.Yes~prob.s1, data = soft.s1)
+plot(h.s1)
+pROC::auc(h.s1)
+```
+
+Look at these results! Age, Height and Weight have no significance, and GDP is at the * level and population is at the ** level. The area under the curve is `r pROC::auc(h.s1)` and The true negative percentage was `r regclass::confusion_matrix(glm.s1)[1]/(regclass::confusion_matrix(glm.s1)[1]+regclass::confusion_matrix(glm.s1)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.s1)[5]/(regclass::confusion_matrix(glm.s1)[2]+regclass::confusion_matrix(glm.s1)[5])*100`%.
+
+Let’s only keep Population and Team and see what happens…
+
+```{r softball_fit, results = "markup"}
+glm.s2 <- glm(Medal.No.Yes ~ Population + Team, data = soft, binomial(link = "logit"))
+summary(glm.s2)
+
+soft.s2 <- remove_missing_levels(fit = glm.s2, test_data = soft)
+
+pR2(glm.s2)["McFadden"]
+
+regclass::confusion_matrix(glm.s2)
+
+prob.s2 = predict(glm.s2, newdata = soft.s2, type = "response")
+soft.s2$prob.s2 = prob.s2
+h.s2 <- roc(Medal.No.Yes~prob.s2, data = soft.s2)
+plot(h.s2)
+pROC::auc(h.s2)
+```
+
+The area under the curve is 'r pROC::auc(h.s2)' and the true negative percentage was `r regclass::confusion_matrix(glm.s2)[1]/(regclass::confusion_matrix(glm.s2)[1]+regclass::confusion_matrix(glm.s2)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.s2)[5]/(regclass::confusion_matrix(glm.s2)[2]+regclass::confusion_matrix(glm.s2)[5])*100`%. Softball (and baseball) were removed from the Olympics because the USA and Japan dominated the sport at the Olympics, and it is clear here, looking at these models, that you can predict the chance of being awarded a model based solely on where the team was coming from. Of course, removing Softball from the Olympics had far reaching, negative impacts that are still felt by the sport years later… But it makes sense looking at these logistical regression models why there was felt a need to remove Softball and Baseball from the Olympics.
+
+For some sports, however, Age and Height do play a role, such as in Swimming, where Weight, GDP, and Population were not statistically significant:
+
+```{r swimming_fit, results = "markup"}
+swim <- subset(olympic.data, Sport == "Swimming")
+glm.a <- glm(Medal.No.Yes ~ Age + Weight + Height + GDP + Population + Team, data = swim, binomial(link = "logit"))
+summary(glm.a)
+
+swim1 <- remove_missing_levels (fit = glm.a, test_data = swim)
+
+pR2(glm.a)["McFadden"]
+
+regclass::confusion_matrix(glm.a)
+
+prob.a = predict(glm.a, newdata = swim1, type = "response")
+swim1$prob.a = prob.a
+h.a <- roc(Medal.No.Yes~prob.a, data = swim1)
+plot(h.a)
+pROC::auc(h.a)
+
+unloadPkg(pROC)
+unloadPkg(regclass)
+unloadPkg(pscl)
+```
+
+So for different sports, there are different factors that go into modeling whether an athelete is awarded a medal or not, and for some, they have a “human element” not captured by the data, and for others, this dataset has all the information needed to accurately predict whether you will recieve a medal or not.
 
 # KNN
 # Random Forest
@@ -695,7 +1136,7 @@ ita_df <- subset(ita_df, select = c(Num.Medals))
 ol_ts <- ts(ita_df,start=1908, end=2016, deltat=4)
 #plot(ol_ts)
 
-autoplot(ol_ts, color="Blue") +
+forecast::autoplot(ol_ts, color="Blue") +
   ggtitle("Italy in the Olympics: Number of Medals") +
   xlab("Year") +
   ylab("Number of Medals")
