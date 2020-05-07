@@ -282,7 +282,7 @@ pairs.panels(olympics_subset,
 unloadPkg(psych)
 ```
 ### Linear Model1 TMedals ~ BMI
-```{r linear_model, results="markup", eval=F}
+```{r linear_model, results="markup"}
 loadPkg(dyn)
 model1 = dyn$lm(TMedals ~ BMI, data=new_data)
 sum_md1 = summary(model1)
@@ -291,33 +291,33 @@ sum_md1
 
 ```
 
-```{r vif_md1, eval=F}
+```{r vif_md1}
 
 vif_md1 = faraway::vif(model1)
 ```
 
 ### Linear Model2 TMedals ~ Age
-```{r model2, eval=F}
+```{r model2}
 
 model2 = dyn$lm(TMedals ~ Age, data=new_data)
 sum_md2 = summary(model2)
 sum_md2
 ```
 
-```{r vifmodel2, eval=F}
+```{r vifmodel2}
 vif_md2 = faraway::vif(model2)
 #vif_md2
 ```
 
 ### Linear Model 3 TMedals ~ BMI + Age
-```{r model3, eval=F}
+```{r model3}
 model3 = dyn$lm(TMedals ~ BMI + Age , data=new_data)
 sum_md3 = summary(model3)
 sum_md3
 ```
 
 ### Linear Model 4 TMedals ~ BMI + Age + GDP
-```{r model4, eval=F}
+```{r model4}
 model4 = dyn$lm(TMedals ~ BMI + Age + GDP , data=new_data)
 sum_md4 = summary(model4)
 sum_md4
@@ -325,7 +325,7 @@ sum_md4
 ```
 
 
-```{r, results='asis', eval=F}
+```{r, results='asis'}
 loadPkg(kableExtra)
 loadPkg(xtable)
 xkabledply(sum_md4, "Linear model4 summary", "center")
@@ -333,7 +333,7 @@ xkabledply(sum_md4, "Linear model4 summary", "center")
 xkablevif(model4)
 ```
 
-```{r summary_linear_models, eval=F}
+```{r summary_linear_models}
 
 
 
@@ -756,7 +756,7 @@ The results show that random Forest model give better results than kNN.
 # Pandemic (Spanish Flu)
 With the novel corona virus pandemic this year and its delay of the Olympics in Tokyo this year, we thought it would be interesting to study a last pandemic in the last century and analyze the impact it had on the Olympic performance. The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which was 0.8 percent of the 1910 population. 
 
-```{r loadpackages, eval=F}
+```{r loadpackages}
 loadPkg(digest)
 loadPkg(corrplot)
 loadPkg(ggcorrplot)
@@ -770,14 +770,14 @@ loadPkg(leaps)
 loadPkg(gridExtra)
 ```
 
-```{r read_pandemic_data, eval=F}
+```{r read_pandemic_data}
 p_olympics <- read.csv("pandemic_olympics.csv")
 ```
 (JOHNSON, NIALL P. A. S., and JUERGEN MUELLER. “Updating the Accounts: Global Mortality of the 1918-1920 ‘Spanish’ Influenza Pandemic.” Bulletin of the History of Medicine, vol. 76, no. 1, 2002, pp. 105–115. JSTOR, www.jstor.org/stable/44446153. Accessed 19 Apr. 2020.) Taken from [@Johnson2002]
 
 Of the European countries that suffered significant excess deaths during the Spanish Influenza Pandemic, these countries competed before and after 1918-1919: Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA). We created a separate pandemic data set containing athletes from these countries that competed in the Olympics between 1908-1928 to study before and after the pandemic. 
 
-```{r H1N1_pandemic, eval=F}
+```{r H1N1_pandemic}
 loadPkg(dplyr)
 NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
 Medals <- c("Gold", "Silver", "Bronze")
@@ -792,7 +792,7 @@ unloadPkg(dplyr)
 ```
 ## Medals Earned 
 The plot shows number of medals earned by Denmark (DEN), France (FRA), Great Britain (GBR), Italy (ITA), Netherlands (NED), Norway (NOR), Sweden (SWE), and United States (USA) before and after the pandemic. There may be more than Gold, Silver or Bronze medals earned by individuals in any sporting event; accounting for the group events.
-```{r plots_num_medals , include=TRUE, eval=F}
+```{r plots_num_medals , include=TRUE}
 NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
 
 
@@ -821,7 +821,7 @@ Great Britain (GBR), Denmark (DEN), Sweden (SWE) saw a decline in the number of 
 
 ## Number of Olympic Athletes
 Looking at the same countries, the plot shows the number of athletes they sent to the Olympics from 1908 - 1928. 
-```{r plots_num_athletes, include=TRUE, eval=F}
+```{r plots_num_athletes, include=TRUE}
 loadPkg("dplyr")
 NOC_SF <- c("ITA", "NED", "SWE", "FRA", "NOR", "DEN", "GBR", "USA")
 
@@ -855,7 +855,7 @@ Great Britain and Sweden saw a sharp decline in the number of athletes that they
 
 ## Average Age of Olympians
 The chart displays the average age of Olympians from the eight countries in our data before and after the pandemic.  
-```{r ageSF, eval=F}
+```{r ageSF}
 loadPkg(dplyr)
 NOC_colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F","#FF7F00")
 
@@ -880,7 +880,7 @@ ggplot(data=pandemic_avg_age, aes(x=Year, y=avg, group=NOC, color=NOC)) +
 The H1N1 Influenza pandemic "Spanish flu" was fatal for individuals aged 20–40 years. The average age of Olympians competing after the pandemic was increased for all countries in our data set.  
 
 ## Average Height and Weight of Olympians
-```{r w_h, eval=F}
+```{r w_h}
 pandemic_avg_hw<- p_olympics %>% filter(Year >= 1908 & Year <= 1928,
                                          NOC %in% NOC_SF,
                                         !is.na(Height),
@@ -915,7 +915,7 @@ w1
 Netherlands (NED) and Norway (NOR) had significant increase in the average height and weight of their athletes after Spanish flu pandemic. Sweden (SWE) and France (FRA) saw a decrease in those averages. 
 
 
-```{r model1, eval=F}
+```{r model1}
 loadPkg(dplyr)
 olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
 
@@ -943,7 +943,7 @@ unloadPkg(dplyr)
 ```
 
 ## Total Number of Olympic Medals (Summer Events) vs. Year 
-```{r, eval=F }
+```{r}
 loadPkg(dplyr)
 
 olympics_total_medals <- olympic_data %>% filter(Medal %in% Medals, Season == "Summer") %>%
@@ -976,7 +976,7 @@ During the 1918 Pandemic, Italy's death toll (per 1,000) was 390,000 death toll.
 
 The Olympics data for Italy from 1908-1928 was converted to a time series and plotted "Total Number of Medals vs Year". 
 
-```{r forecast, eval=F}
+```{r forecast}
 
 olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
 olympic_all <- ts(ITA_Tmedals_all$n, start=1908, end = 2016, deltat=4)
@@ -1013,7 +1013,7 @@ The time series shows random fluctuations in the data over time, no overall tren
 
 ## Using 1908-1928 Time Series as Training Data
 From the quick EDA, time series may not be appropriate method to model the number of medals Italy may earn in future Olympics. As a learning academic exercise, we will explore different time series methodologies to forecast. 
-```{r forecast1, eval=F}
+```{r forecast1}
 
 olympic_pts <- ts(ITA_Tmedals$n, start=1908, end = 1928, deltat=4)
 olympic_all <- ts(ITA_Tmedals_all$n, start=1960, end = 2016, deltat=4)
@@ -1027,7 +1027,7 @@ olympic_test <- window(ol_ts, start=2008, end = 2016, deltat=4)
 ## Exploring Holt-Winters and ETS-ANN Time Series Forecasting 
 Holt-Winters uses exponential smoothing to make short-term forecasts. Models is designated as either additive or multiplicative. 
 
-```{r fit, eval=F}
+```{r fit}
 fit1.hw <- HoltWinters(x=olympic_train, beta = FALSE,gamma = FALSE) 
 plot(fit1.hw)
 summary(fit1.hw)
@@ -1066,7 +1066,7 @@ autoplot(fit2.hw.forecast)+
 
 
 ```
-```{r accuracy, eval=F}
+```{r accuracy}
 loadPkg(dplyr)
 ITA_2012 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2012")
 ITA_2016 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2016")
@@ -1074,7 +1074,7 @@ ITA_2016 <- olympics_total_medals %>% filter (NOC == "ITA" & Year == "2016")
 ```
 
 ## Time Series Linear Model for Italy
-```{r, eval=F }
+```{r}
 h <- 10
 fit.lin <- tslm(olympic_all ~ trend)
 fcasts.lin <- forecast(fit.lin, h = h)
@@ -1117,7 +1117,7 @@ autoplot(olympic_all) +
 Above plots try to fit the number of medals to an algorithm that could would best be able to predict the number of Olympic medals Italy will earn after Covid-19 pandemic. Visually, Cubic Spline seems closest in approximation.   
 
 ## Arima Model
-```{r arima, eval=F}
+```{r arima}
 olympic_arima<- auto.arima(olympic_all, seasonal=FALSE)
 summary(olympic_arima)
 
@@ -1130,7 +1130,7 @@ The Olympic dat set was divided into a training set (1908-1928) which includes t
 
 
 
-```{r time_series_summary, eval=F}
+```{r time_series_summary}
 hw_summary <- data.frame(cbind(year = c("2012","2016","2020"),
                                actual = c(132, 144, NA),
                               predicted = c(130,130, 130),
