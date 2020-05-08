@@ -2,16 +2,16 @@
 
 Here are the following files in this folder, and a brief description:
 
-proj_template.Rmd
+final_project.Rmd
 -----------------
 
-This is the template Rmd style.
-It specifies the bibliography file, bibliography style (APS), the github link, and the customized css styling.
+This is the final Rmd file.
+It specifies the bibliography file, bibliography style (AIP/APS), the github link, and the customized css styling.
 
-proj_template.html
+final_project.html
 ------------------
 
-This is the html output file of proj_template.Rmd
+This is the html output file of final_project.Rmd
 
 olympic_data.csv
 ----------------
