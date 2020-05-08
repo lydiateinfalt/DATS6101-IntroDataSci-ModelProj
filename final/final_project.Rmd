@@ -2532,5 +2532,31 @@ unloadPkg(ggcorrplot)
 unloadPkg(ggplot2)
 ```
 
+# Summary and Conclusions
+## KMeans & KMedoids
+  * On continuous categories: Age, Weight, Height, Population, GDP
+  * Triathlon: are statistically significant clusters (H >= 0.77) and Population+GDP appear to add another cluster
+  * Softball: are statistically significant clusters (H >= 0.77) however Population+GDP *do not* appear to add another cluster in this case/the clusters, if present, are interwoven/on top of one another
+
+## Logistic Regression
+  * Difficult to model Medals: Yes No for entire data set
+  * modeling Medals: Yes No more successful when subsetting data by Sport
+  * Some sports like Softball and Baseball can be very accurately modelled with only Population and Team, whereas Swimming requires Age, Height, and Team
+
+## KNN vs Random Forest
+  * Better to model Bronze/Silver/Gold versus Model Yes No
+  * Random Forest higher accuracy and 4 models had highest accuracy
+
+## Pandemic
+  * Time series analysis using Holt-Winters and ARIMA
+  * Need to employ evaluation techniques on models
+  * Periodic behavior observed
+  * Study of 1918-1919 Spanish Influenza Pandemic did not reveal any major conclusions to the current Covid-19 pandemic. World War I also coincided with the Spanish Flu.
+
+## Trends Over Time
+  * 4 models: linear, exponential, quadratic, cubic
+  * Test w/ ANOVA & chi-square/dof statistics results change w/ sport, sex, age, weight, and height variety of models preferred; not just linear
+  * Check parameter values using MC simulations
+
 # References
 
