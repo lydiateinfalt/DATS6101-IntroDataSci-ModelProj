@@ -408,6 +408,82 @@ combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
+## MC Sims
+
+```{r fit_ydata_cubic}
+mc_cubic <- function(numSims, df, xInput, yInput) {
+  # seed
+  set.seed(666)
+  #list from fits
+  list_fits <- list()
+  #list for chisquare vals
+  list_chisquare <- list()
+  #list for reduced chi-square vals
+  list_reduce_chisquare <- list()
+  #list of a values
+  list_a <- list()
+  #list of b values 
+  list_b <- list()
+  #list of c values 
+  list_c <- list()
+  #list of b values 
+  list_d <- list()
+  # cubic model function, it takes 5 inputs
+  cubic_func <- function(x, a, b, c, d) {
+    a*x*x*x + b*x*x + c*x + d 
+  }
+  var_x <- eval(substitute(xInput), eval(df))
+  var_y <- eval(substitute(yInput), eval(df))
+  # MC sims
+  for (i in 1:numSims) {
+    temp_y <- rnorm(length(var_x), mean=var_y, sd=0.1)
+    list_fits[[i]] <- nlsLM(temp_y ~ cubic_func(var_x, a, b, c, d), 
+                              start=list(a=1, b=1, c=1, d=1))
+    list_a[[i]] <- coef(list_fits[[i]])[[1]]
+    list_b[[i]] <- coef(list_fits[[i]])[[2]]
+    list_c[[i]] <- coef(list_fits[[i]])[[3]]
+    list_d[[i]] <- coef(list_fits[[i]])[[4]]
+    }
+  params <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b,
+                               "c.values"=list_c, "d.values"=list_d))
+  return(params)
+}
+```
+
+```{r}
+swim_f_age_cubic <- mc_cubic(200, swimming_F, Year, mean.Age)
+head(swim_f_age_cubic)
+loadPkg(PerformanceAnalytics)
+chart.Correlation(swim_f_age_cubic, histogram=TRUE, pch=19)
+```
+
+
+```{r func_make_ellipses}
+draw_ellipses_df <- function(df, conf_Int, conf_Int_Name) {
+  loadPkg(car)
+  for(i in 1:(ncol(df)-1)) {
+    for(j in (i+1):ncol(df)) {
+      if(j != i) {
+        dataEllipse(df[,i], df[,j], levels=c(conf_Int), 
+                    ylab=paste("param", colnames(df)[j]), 
+                    xlab=paste("param", colnames(df)[i]), 
+                    ellipse.label=c(conf_Int_Name) 
+                    )
+        legend("bottomleft", c(conf_Int_Name), col=c("blue"), lwd=10)
+      }
+    }
+  }
+}
+```
+
+```{r}
+par(mfrow=c(2,3))
+draw_ellipses_df(swim_f_age_cubic, 0.68, "68%")
+```
+
+
+
+
 
 
 # References
