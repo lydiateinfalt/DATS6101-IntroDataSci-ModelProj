@@ -142,7 +142,6 @@ olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
 str(olympic_data)
 ```
 
-
 The athlete events data has `r ncol(olympic_data)` columns and `r nrow(olympic_data)` rows/entries, for a total of `r ncol(olympic_data)*nrow(olympic_data)` individual data points. In `olympic_data` each row corresponds to an individual athlete competing in an individual Olympic event. The variables are the following:
 
 1. ID: Unique number for each athlete
@@ -215,6 +214,22 @@ Just quickly visualizing thw correlation will be useful for model building, but 
 ```{r subset_corr, echo = FALSE}
 loadPkg("dplyr")
 olympics_subset <- olympic_data %>% filter(!is.na(Age)) %>% select(Year, NOC.Int, Sex.Int, Age, Height, Weight, BMI, BMI.Category, Population, GDP, GDPpC, Medal.No.Yes)
+
+#olympic_data9 <- data.frame(read.csv("olympic_data.csv"))
+olympic_data9 <- olympic_data
+# olympic_data9$BMI.Category <- as.factor(olympic_data9$BMI.Category)
+# olympic_data9$Medal.No.Yes <- as.factor(olympic_data9$Medal.No.Yes)
+# olympic_data9$Medal <- as.factor(olympic_data9$Medal)
+olympic_data_1 <- olympic_data9 %>% select(c(-ID, -Name, -Last.Name, -Height, -Weight, -Team, -Games, -City, -Event, -GDP, -Population, -First.Name))
+olympic_data_1 <- olympic_data_1 %>% filter(Medal.No.Yes=='1')
+olympic_data_1 <- olympic_data_1 %>% filter(!Medal=='No Medal')
+
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$Age))
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$GDPpC))
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$BMI))
+olympic_data_1 <- olympic_data_1 %>% filter(!is.na(olympic_data_1$Medal))
+olympic_data_1$Medal <- droplevels(olympic_data_1$Medal)
+
 unloadPkg("dplyr")
 
 loadPkg("corrplot")
@@ -599,19 +614,23 @@ vif_md4 = faraway::vif(model4)
 ```
 
 ```{r summary_linear_models}
-# model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
-# m <- c(summary(model1))
-# ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
-# df <- data.frame(model_names, ar2_values)
-# 
-# names(df) <- c("", "Adjusted R2")
-# 
-# kable(df) %>% kable_styling()
-# 
-# vdf <- data.frame(vif_md2)
-#    
-# vtable<-  kable(vdf) %>% kable_styling
-# xkablevif(model4)
+model_names <- c("Linear Model 1: TMedals ~ GDP", "Linear Model 2: TMedals ~ GDP + Population", "Linear Model 3: TMedals ~ GDP + Population + Height", "Linear Model 4: TMedals ~ GDP + Population + Height + Sport.Int")
+m <- c(summary(model1))
+ar2_values <- c(summary(model1)$adj.r.squared,summary(model2)$adj.r.squared, summary(model3)$adj.r.squared, summary(model4)$adj.r.squared)
+df <- data.frame(model_names, ar2_values)
+
+names(df) <- c("", "Adjusted R2")
+
+kable(df) %>% kable_styling()
+
+vdf <- data.frame(vif_md2)
+
+vtable <- kable(vdf) %>% kable_styling
+faraway::vif(model4) %>%
+    kable(caption = "VIFs of the model", digits = 4, col.names = 'VIF') %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F,
+    position = "left")
 ```
 
 According to the Adjusted $R^2$ value, model 4 is the best fit. The coefficients’ p-values for (Intercept), GDP, Population, Height, and Sport are less than significance level $\alpha$ = 0.05, making them statistically significant. The VIF values for GDP, Population, Height and Sport are greater than 1 but less than 5 so multicollinearity is not an issue with this model. 
@@ -893,8 +912,392 @@ unloadPkg(pscl)
 
 So for different sports, there are different factors that go into modeling whether an athelete is awarded a medal or not, and for some, they have a “human element” not captured by the data, and for others, this dataset has all the information needed to accurately predict whether you will recieve a medal or not.
 
-# KNN
-# Random Forest
+# Predicting Model Winners Based on Athlete's Information and Sport
+
+In this section a classification model will be built using kNN and Random Forest that can predict if an athlete with certain characteristics can win a gold, silver, or bronze medal when they participate in the Olympics.
+
+First step is to drop columns that maybe not useful. This is done based on domain knowldge as well as recognoizing that some factors will be co-linearly related. For example Gross Domestic Product per capita (GDPpC) of a country's athlete will have a direct relationship to GDP and population. Another example is Weight, Height and BMI. The former two are included in BMI's calculation.
+
+NA values are all dropped. Attempting linear interpolation for GDPpC assumes that that is linear in its nature, however, as shown in the figure below it has cyclical characterisitc.
+
+![GDP growth (annual %) - Afghanistan, Indonesia, Jordan, Russian Federation, Mexico](images/GDP_variation.JPG)
+
+Furthermore, estimating missing age, height and weight for athelets will result inaccurate data being input into models.
+
+```{r OQ - import data and clean}
+#moved most of this code to an earlier section where it would work reliably
+head(olympic_data_1) %>% 
+    kable() %>%
+    kable_styling(position = "center") %>%
+    kable_styling(bootstrap_options = "striped", full_width = F, position = 'left')
+```
+
+## Random Forest
+Data is split into train and test sets at 70% and 30% ratio respectively.
+
+```{r SplitTrainTest RF}
+set.seed(1)
+train_rows1 = sample(1:nrow(olympic_data_1), round(0.7 * nrow(olympic_data_1), 0),  replace = FALSE)
+length(train_rows1) / nrow(olympic_data_1)
+data_train1 = olympic_data_1[train_rows1, ]
+data_test1 = olympic_data_1[-train_rows1, ]
+nrow(data_train1)
+nrow(data_test1)
+
+# Establish that the train data indicies for kNN and logit match
+# table(row.names(data_train1) == row.names(data_train2))
+```
+
+Below is feature selection method in Random Forest library to pick best features to produce highest accuracy using crossvalidation and Backward feature selection.
+
+```{r BFS RF, eval=F}
+set.seed(7)
+# load the library
+library(mlbench)
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+results1 <- rfe(data_train1[,c("GDPpC" , "Sex" , "BMI" , "Age" , "Decade" , "Season" , "Sport")], data_train1[,"Medal"], sizes=c(1:8), rfeControl=control)
+# summarize the results
+print(results1)
+# list the chosen features
+predictors(results1)
+# plot the results
+plot(results1, type=c("g", "o"))
+```
+
+![Accuracy vs Number of Variables ](images/rf-accu.png)
+
+The results above indicate the features that give the best accuracy results are GDPpC, Sex, Decade and Sport.
+
+```{r Random Forest}
+loadPkg("randomForest")
+# install.packages("ck37r") 
+olympics_rf <- randomForest(Medal ~ GDPpC + Sex + Decade + Sport, data = data_train1, importance = TRUE)
+olympics_rf
+```
+
+```{r predictions RF}
+predTrain_rf <- predict(olympics_rf, data_train1[, c("GDPpC", "Sex" ,"Decade", "Sport")], type = "class")
+predTest_rf  <- predict(olympics_rf, data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+```
+
+Initial model without any tuning gives the results below:
+```{r cm train RF}
+cm_train_rf = caret::confusionMatrix( predTrain_rf, reference = data_train1[, "Medal"] )
+cm_train_rf$overall
+cm_train_rf$byClass
+acc_tra_rf <- cm_train_rf$overall[1]
+sen_tra_rf <- cm_train_rf$byClass[1]
+spe_tra_rf <- cm_train_rf$byClass[2]
+pre_tra_rf <- cm_train_rf$byClass[3]
+```
+
+```{r cm test RF}
+cm_test_rf = caret::confusionMatrix( predTest_rf, reference = data_test1[, "Medal"] )
+cm_test_rf$overall
+cm_test_rf$byClass
+cm_test_rf$table
+acc_tes_rf <- cm_test_rf$overall[1]
+sen_tes_rf <- cm_test_rf$byClass[1]
+spe_tes_rf <- cm_test_rf$byClass[2]
+pre_tes_rf <- cm_test_rf$byClass[3]
+```
+
+Model Parameter Tunning:
+
+Default number of trees built in the randomForest model is ntree = 500. The code below aims to increase the number of trees 3 times in 250 increments to see if it improves the confusion matrix metrics.
+
+```{r ntree1, eval=F}
+
+modellist_ntree <- list()
+
+for (ntree in c(500, 750, 1000, 1250)){
+  fit <- randomForest(Medal ~ GDPpC + Sex + Decade + Sport, 
+               data = data_train1, 
+               importance = TRUE,
+               ntree = ntree)
+  key <- toString(ntree)
+  modellist_ntree [[key]] <- fit
+}
+
+```
+
+```{r ntree2, eval=F}
+predTest_rf50  <- predict(modellist_ntree['500'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf50 <- confusionMatrix(
+  factor(predTest_rf50, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+predTest_rf75  <- predict(modellist_ntree['750'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf75 <- confusionMatrix(
+  factor(predTest_rf75, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+predTest_rf100  <- predict(modellist_ntree['1000'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf100 <- confusionMatrix(
+  factor(predTest_rf100, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+predTest_rf125  <- predict(modellist_ntree['1250'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf125 <- confusionMatrix(
+  factor(predTest_rf125, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+
+ntree <- c(500, 750, 1000, 1250)
+
+acc_rfntree <- c(cm_test_rf50$overall[1], cm_test_rf75$overall[1], cm_test_rf100$overall[1], cm_test_rf125$overall[1])
+sen_rfntree <- c(cm_test_rf50$byClass[1], cm_test_rf75$byClass[1], cm_test_rf100$byClass[1], cm_test_rf125$byClass[1])
+spe_rfntree <- c(cm_test_rf50$byClass[2],cm_test_rf75$byClass[2], cm_test_rf100$byClass[2], cm_test_rf125$byClass[2])
+pre_rfntree <- c(cm_test_rf50$byClass[3], cm_test_rf75$byClass[3], cm_test_rf100$byClass[3], cm_test_rf125$byClass[3])
+
+ntree_plot <- data.frame(ntree, acc_rfntree, spe_rfntree, pre_rfntree)
+
+ggplot(ntree_plot, aes(x = ntree))+ 
+  geom_line(aes(y = acc_rfntree), colour = "red") + 
+  geom_line(aes(y = sen_rfntree), colour = "green") +
+  geom_line(aes(y = spe_rfntree), colour = "blue") + 
+  geom_line(aes(y = pre_rfntree), colour = "black")
+
+```
+
+![Random forest ntree = 500, 750, 1000 and 1250. Accuracy(Red), Sensitivty(Green),  Specificty(Blue) and Precision(Black) ](images/tunning1.JPG)
+
+ntree = 1000 gave the best results for all metrics except sensitivity which decrease by approximately 0.1%.
+
+Next the maximum number of nodes is altered and models are compared with ntree = 1000. The maxnodes parameter was varied 2500, 3000, 4000 and 5000.
+
+```{r maxnodes1, eval=F}
+
+modellist_maxnodes <- list()
+
+for (maxnodes in c(2500,3000,4000, 5000)){
+  fit <- randomForest(Medal ~ GDPpC + Sex + Decade + Sport, 
+               data = data_train1,
+               importance = TRUE,
+               ntree = 1000,
+               maxnodes = maxnodes)
+  key <- toString(maxnodes)
+  modellist_maxnodes[[key]] <- fit
+}
+```
+
+```{r maxnodes2, eval=F}
+predTest_rf1  <- predict(modellist_maxnodes['2500'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf1 <- caret::confusionMatrix(
+  factor(predTest_rf1, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+predTest_rf2  <- predict(modellist_maxnodes['3000'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf2 <- caret::confusionMatrix(
+  factor(predTest_rf2, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+predTest_rf3  <- predict(modellist_maxnodes['4000'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf3 <- caret::confusionMatrix(
+  factor(predTest_rf3, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+
+predTest_rf4  <- predict(modellist_maxnodes['5000'][[1]], data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "class")
+
+cm_test_rf4 <- caret::confusionMatrix(
+  factor(predTest_rf4, levels = c("Bronze", "Gold", "Silver")),
+  factor(data_test1$Medal, levels = c("Bronze", "Gold", "Silver")))
+
+maxnodes <-c(2500,3000,4000, 5000)
+
+acc_rfnmaxnodes <- c(cm_test_rf1$overall[1], cm_test_rf2$overall[1], cm_test_rf3$overall[1], cm_test_rf4$overall[1])
+sen_rfnmaxnodes <- c(cm_test_rf1$byClass[1], cm_test_rf2$byClass[1], cm_test_rf3$byClass[1], cm_test_rf4$byClass[1])
+spe_rfnmaxnodes <- c(cm_test_rf1$byClass[2], cm_test_rf2$byClass[2], cm_test_rf3$byClass[2], cm_test_rf4$byClass[2])
+pre_rfnmaxnodes <- c(cm_test_rf1$byClass[3], cm_test_rf2$byClass[3], cm_test_rf3$byClass[3], cm_test_rf4$byClass[3])
+
+nmaxnodes_plot <- data.frame(maxnodes, acc_rfnmaxnodes, sen_rfnmaxnodes, spe_rfnmaxnodes, pre_rfnmaxnodes)
+
+ggplot(nmaxnodes_plot, aes(x = maxnodes))+ 
+  geom_line(aes(y = acc_rfnmaxnodes), colour = "red") + 
+  geom_line(aes(y = sen_rfnmaxnodes), colour = "green") +
+  geom_line(aes(y = spe_rfnmaxnodes), colour = "blue") + 
+  geom_line(aes(y = pre_rfnmaxnodes), colour = "black")
+
+```
+
+![Random forest maxnodes = 2500,3000,4000 and 5000. Accuracy(Red), Sensitivty(Green),  Specificty(Blue) and Precision(Black) ](images/tunning2.JPG)
+
+Given the small accuracy changes due to the tuning attempts above, the final model is kept as done before with default parameters.
+
+```{r roc_auc for random forest}
+loadPkg(pROC)
+olympic_rf_prob <- predict(olympics_rf, data_test1[, c("GDPpC", "Sex", "Decade", "Sport")], type = "prob")
+pred_dumms <- psych::dummy.code(olympic_rf_prob)
+medal_dumms <- psych::dummy.code(data_test1$Medal)
+
+result.roc <- roc(medal_dumms, olympic_rf_prob) # Draw ROC curve.
+plot(result.roc, print.thres="best", print.thres.best.method="closest.topleft")
+
+# source: https://stackoverflow.com/questions/30366143/how-to-compute-roc-and-auc-under-roc-after-training-using-caret-in-r
+```
+AUC = 0.75 an acceptable results. 
+```{r Tree Plot}
+# devtools::install_github('skinner927/reprtree')
+loadPkg(reprtree)
+reprtree:::plot.getTree(olympics_rf, k=499, depth = 5)
+```
+
+Next a KNN model will be built and compared with the final Random Forest model above.
+
+## KNN
+
+In order for the kNN model package to give the best result- the data is first scaled and all categorical columns are mapped to 1s and 0s. The same seed number and split percentages are used in order to be able to compare the model with Random Forest model. 
+
+```{r KNN packages, include=F}
+loadPkg(caret)
+loadPkg(class)
+loadPkg(e1071)
+loadPkg(FNN) 
+loadPkg(gmodels) 
+loadPkg(psych) 
+```
+
+```{r Data Cleaning for KNN}
+loadPkg(fastDummies)
+
+olympic_data_2 <- data.table::copy(olympic_data_1)
+olympic_data_2 <- olympic_data_2 %>% select(c(GDPpC, Sex, Decade, Sport, Medal))
+
+normalize <- function(x) {return ((x - min(x)/(max(x)-min(x))))}
+
+olympic_data_2$GDPpC <- normalize(olympic_data_2$GDPpC)
+
+olympic_data_2 <-  dummy_cols(olympic_data_2, remove_first_dummy = TRUE)
+olympic_data_2 <- olympic_data_2 %>% select(-c(Sex, Decade, Sport, Medal_Gold, Medal_Silver))
+# "GDPpC", "Sex", "Decade", "Sport"
+```
+
+```{r SplitTrainTest kNN}
+set.seed(1)
+train_rows2 = sample(1:nrow(olympic_data_2), round(0.7 * nrow(olympic_data_2), 0),  replace = FALSE)
+length(train_rows2) / nrow(olympic_data_2)
+data_train2 = olympic_data_2[train_rows2, ]
+data_test2 = olympic_data_2[-train_rows2, ]
+nrow(data_train2)
+nrow(data_test2)
+
+column_names <- colnames(data_test2)
+column_names <- column_names[column_names != "Medal"]
+# Establish that the train data indicies for kNN and logit match
+# table(row.names(data_train1) == row.names(data_train2))
+```
+
+```{r KNN Function, include=F}
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  
+  # Build knn with k neighbors considered.
+  set.seed(1)
+  class_knn = class::knn(train = train_set,    #<- training set cases
+                  test = val_set,       #<- test set cases
+                  cl = train_class,     #<- category for classification
+                  k = k) #,                #<- number of neighbors considered
+                  # use.all = TRUE)       #<- control ties between class assignments
+                                        #   If true, all distances equal to the kth 
+                                        #   largest are included
+  
+  tab = table(class_knn, val_class)
+  
+  # Calculate the accuracy.
+  accu = sum(tab[row(tab) == col(tab)]) / sum(tab)                         
+  cbind(k = k, accuracy = accu)
+}
+```
+
+Plotting the accuracy of kNN with default parameters and varying k between 1-31 gives the restuls below for the same features used:
+
+```{r KNN Model, eval=F}
+knn_different_k = sapply(seq(1, 31, by = 2),
+                         function(x) chooseK(x,
+                                          train_set = data_train2[, column_names],
+                                          val_set = data_test2[, column_names],
+                                          train_class = data_train2[, "Medal"],
+                                          val_class = data_test2[, "Medal"]))
+
+# Reformat the results to graph the results.
+str(knn_different_k)
+knn_different_k_df = data.frame(k = knn_different_k[1,],
+                             accuracy = knn_different_k[2,])
+
+plotKnn <- ggplot(knn_different_k_df,
+                  aes(x = k, y = accuracy)) +
+                  geom_line(color = "orange", size = 1.5) +
+                  geom_point(size = 3)
+print(plotKnn)
+```
+![Accuracy vs k- kNN model](images/knn-acc-graph.png)
+
+From the plot above k=5 gives the best accuracy.
+
+Validation using training data results are shown below:
+```{r Chosen k5 validation model}
+set.seed(1)
+olympics_5NN1 = knn(train = data_train2[, column_names],
+               test = data_train2[, column_names],
+               cl = data_train2[, "Medal"], k = 5)
+# str(olympics_5NN1)
+# length(olympics_5NN1)
+table(olympics_5NN1)
+```
+
+Validation using test data results are shown below:
+```{r Chosen k5 testing model}
+set.seed(1)
+olympics_5NN2 = knn(train = data_train2[, column_names],
+               test = data_test2[, column_names],
+               cl = data_train2[, "Medal"], k = 5)
+# str(olympics_5NN2)
+# length(olympics_5NN2)
+table(olympics_5NN2)
+```
+
+Confusion matrix for both training and test validations are shown below:
+```{r Confusion Matrix 5NN 1}
+cm_train_5NN = caret::confusionMatrix(olympics_5NN1, reference = as.factor(data_train2[, "Medal"]) )
+cm_train_5NN$table
+acc_tra1 <- cm_train_5NN$overall[1]
+sen_tra1 <- cm_train_5NN$byClass[1]
+spe_tra1 <- cm_train_5NN$byClass[2]
+pre_tra1 <- cm_train_5NN$byClass[3]
+```
+
+```{r Confusion Matrix 5NN 2}
+cm_test_5NN = caret::confusionMatrix(olympics_5NN2, reference = as.factor(data_test2[, "Medal"]) )
+cm_test_5NN$table
+acc_tes1 <- cm_test_5NN$overall[1]
+sen_tes1 <- cm_test_5NN$byClass[1]
+spe_tes1 <- cm_test_5NN$byClass[2]
+pre_tes1 <- cm_test_5NN$byClass[3]
+```
+
+Below is the summary of Accuracy, Sensitivity, Specificity and Precision for the training and test sets at k = 5.
+
+| Model |Accuracy    | Sensitivity | Specificity | Precision  |
+|-------|------------|-------------|-------------|------------|
+| Train |`r acc_tra1`|`r sen_tra1` |`r spe_tra1` |`r pre_tra1`|
+| Test  |`r acc_tes1`|`r sen_tes1` |`r spe_tes1` |`r pre_tes1`|
+
+An the results for Random Forest
+
+| Model |Accuracy      | Sensitivity   | Specificity   | Precision    |
+|-------|--------------|---------------|---------------|--------------|
+| Train |`r acc_tra_rf`|`r sen_tra_rf` |`r spe_tra_rf` |`r pre_tra_rf`|
+| Test  |`r acc_tes_rf`|`r sen_tes_rf` |`r spe_tes_rf` |`r pre_tes_rf`|
+
+The results show that random Forest model give better results than kNN.
+
 # Pandemic (Spanish Flu)
 With the novel corona virus pandemic this year and its delay of the Olympics in Tokyo this year, we thought it would be interesting to study a last pandemic in the last century and analyze the impact it had on the Olympic performance. The following countries in Europe had 2.64 million excess deaths occurred during the period when the H1N1 Pandemic (also commonly called Spanish Flu) was circulating from January 1918 - June 1919: Italy, Bulgaria, Portugal, Spain, Netherlands, Sweden, Germany, Switzerland, France, Norway, Denmark, UK (Scotland, England, Wales). In the US, 675,000 people died from H1N1 which was 0.8 percent of the 1910 population. 
 
