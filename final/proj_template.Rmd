@@ -1699,6 +1699,838 @@ The analysis of Olympic Medals that Italy earned before and after the 1918-1919 
 
 
 # Trends over time
-# Summary and Conclusion
+
+## Creating the models
+
+I'm going to try 4 different models:
+
+$$
+y_{\text{linear}}(x) = ax+b \\
+y_{\text{exponential}}(x) = a\exp(bx) + c \\
+y_{\text{quadratic}}(x) = ax^2 + bx + c \\
+y_{\text{cubic}}(x) = ax^3 + bx^2 + cx + d 
+$$
+
+The first model is our traditional linear regression whereas the other 3 models are nonlinear: exponential, quadratic polynomial, and cubic polynomial. I will use ANOVA to compare the nested models, and I will also use the reduce chi-square "rule of thumb" to test my fits. The F-test is sensitive to over-fitting in a way that the chi-square statistic is not.  
+
+```{r funcs_for_models}
+lin_func <- function(x, a, b) {
+  a*x+b
+}
+
+quad_func <- function(x, a, b, c) {
+  a*x*x + b*x + c
+}
+
+cubic_func <- function(x, a, b, c, d) {
+  a*x*x*x + b*x*x + c*x + d 
+}
+
+exp_func <- function(x, a, b, c) {
+  a*exp(b*x) + c
+}
+```
+
+## Chi-square "rule of thumb"
+
+We consider $m$ equations that relate the $n$ random variables with values
+
+$$
+y_j = f(a_1,...,a_m,x_j) + \epsilon_j, ~~~~~ j = 1,...,n
+$$
+
+If we assume that only the $n-m$ random variables can fluctuate independently, and that the data uncertainties follow a Normal distribution, then the resulting chi-square is expected to be distributed according to
+
+$$
+\chi^2_{\nu}, ~~~~~ \nu = n - m
+$$
+
+Which we can compare to the "rule of thumb", which is
+
+$$
+\text{if } \frac{\chi^2}{n-m} \approx 1 ~~~ \text{where }\nu = n - m \implies \text{ "a good fit"}
+$$
+
+If we have $\nu$ independent RVs and the $x_i$ are each normally distributed with mean $\mu_i$ and variance $\sigma_i^2$, then the chi-square is,
+
+$$
+\frac{\chi^2}{n-m} = \frac{\sum_{i=1}^{\nu} (x_i-\mu_i)^2/\sigma_i^2}{n-m}
+$$
+
+where $n$ is the length of our y data and $m$ is the degree of the polynomial. Using the above equation, we can calculate the values for our $\chi^2$ "rule of thumb".
+
+```{r func2_chi_square}
+#calculates the chisquare/dof statistic
+calc_chisquare <- function (model, yDat, degree) {
+  # degree of exp = 1
+  # deg of lin = 2
+  # deg of quad = 3
+  # deg of cubic = 4
+  chisquare <- (sum((predict(model)-yDat) ^ 2)/(sd(yDat) ^ 2))/(length(yDat)-degree)
+  chisquare <- round(chisquare, 3)
+  return(chisquare)
+}
+```
+
+## Number of Events
+
+First let's look to see if we can model the number of Olympic Games over the years. This will require us to import some more data from https://www.topendsports.com/events/summer/sports/number.htm [@WoodOlympEvents]. 
+
+```{r loadpkgs_izzy}
+loadPkg(minpack.lm)
+loadPkg(kableExtra)
+loadPkg(ggplot2)
+loadPkg(tidyverse)
+loadPkg(car)
+```
+
+
+```{r num_events_import}
+sports_dat <- data.frame(read.csv("sports_per_year.csv"))
+
+ggplot(sports_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  geom_line() + 
+  ylim(0, 40) + 
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years", 
+       x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
+
+There is clearly an upward trend, but no seasonal pattern. The data is also a little choppy at the beginning. Part of the explanation is that the data points are not evenly spaced. Most Olympic games are 4 years apart, but a few of them are just 2 years apart, and during World War I and World War II there were 8-year and 12-year gaps, respectively. Since time series data should be evenly spaced over time, we'll only look at data from 1948 on, when the Olympics started being held every 4 years without any interruptions.
+
+```{r}
+index_1948 <- which(sports_dat$Year == 1948)
+use_dat <- sports_dat[12:nrow(sports_dat),]
+ggplot(use_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  geom_line() + 
+  ylim(0, 40) + 
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years \n starting from 1948", 
+       x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
+
+Now I will try the model fits on the number of events per Olympic Games data. 
+
+```{r model_num_events}
+xdata <- use_dat$Year
+ydata <- use_dat$Num.Sports
+
+mod_lin <- nlsLM(ydata~lin_func(xdata, a1, b1), start=list(a1=1, b1=10))
+#summary(mod_lin)
+#summary(lm(Num.Sports~Year, data=use_dat))
+mod_quad <- nlsLM(ydata~quad_func(xdata, a1, b1, c1), start=list(a1=1, b1=1, c1=1))
+mod_cubic <- nlsLM(ydata~cubic_func(xdata, a1, b1, c1, d1), start=list(a1=1, b1=1, c1=1, d1=1))
+mod_exp <- nlsLM(ydata~exp_func(xdata, a1, b1, c1), start=list(a1=1, b1=0, c1=1))
+
+data_plot <- ggplot(use_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  ylim(0, 40) + xlim(1948, 2020) +
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years \n starting from 1948", x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+
+data_plot + geom_line(aes(x=xdata, y=predict(mod_lin)), color="red") + 
+  geom_line(aes(x=xdata, y=predict(mod_quad)), color="orange") +
+  geom_line(aes(x=xdata, y=predict(mod_cubic)), color="green") +
+  geom_line(aes(x=xdata, y=predict(mod_exp)), color="blue")
+```
+
+Now that we have our models we can run ANOVA and the chi-square
+
+```{r models_num_events}
+model_list_1exp <- c("Linear", "Exponential")
+model_list_123 <- c("Linear", "Quadratic", "Cubic")
+
+anova_results1exp <- anova(mod_lin, mod_exp)
+anova_results123 <- anova(mod_lin, mod_quad, mod_cubic) 
+
+anova_res1exp <- cbind("Models"=model_list_1exp, anova_results1exp)
+anova_res123 <- cbind("Models"=model_list_123, anova_results123)
+
+anova_res1exp %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+anova_res123 %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r func3_makedf_izzy}
+#makes a dataframe from two lists, where the first list should be the models and the second list should be the chisquare/dof statistic
+make_df <- function(list1, list2) {
+  # first list should be model list
+  # second list should be chi-square/dof values
+  matrix <- cbind("Model"=list1, "Chi^2/d.o.f"=list2)
+  matrix <- as.data.frame(matrix)
+  return(matrix)
+}
+```
+
+```{r chisquare_calc_izzy}
+chisquare_list <- c(calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4))
+chisquare_list <- as.numeric(chisquare_list)
+mod_list <- c("Exponential", "Linear", "Quadratic", "Cubic")
+make_df(mod_list, chisquare_list) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+According to the ANOVA test the best fit is the linear line and adding complexity to the model does not help us very much. F-tests are more sensitive to over-fitting than the chi-square test, so even though the chi-square/dof statistic shows a preference for the more complex models we sort of anticipated that result. 
+
+### Monte Carlo Simulations for Number of Events
+
+Now I am going to run the MC simulations of this data. I will introduce a pseudorandom noise in the y data using N(0,$\sigma$), where the standard deviation has been calculated from the original y data itself. 
+
+```{r mc_numevents}
+#xdata <- use_dat$Year
+#ydata <- use_dat$Num.Sports
+ydata_long <- list()
+xdata_long <- list()
+sigma <- sd(ydata)
+end = as.integer(10 ^ 4)
+for (i in 1:end) {
+  xdata_long[[i]] <- xdata
+  ydata_long[[i]] <- rnorm(length(xdata), mean=lin_func(xdata, 0.20658, -387.01053), sd=sigma)
+  #plot(xdata, ydata[[i]])
+}
+xdata_long_unlist <- as.numeric(unlist(xdata_long))
+ydata_unlist <- as.numeric(unlist(ydata_long))
+plot(xdata_long_unlist, ydata_unlist, main="10 ^ 4 datasets", ylab="y", xlab="x")
+```
+
+Now that we've generated our data lets fit it and see what values we get for the parameters $a$ and $b$ (these are the parameters from our linear model fit $y = ax+b$).
+
+```{r lin_mod_numevents}
+k <- as.integer(1)
+#list from fits
+list_fits <- list()
+#list for chisquare vals
+list_chisquare <- list()
+#list for reduced chi-square vals
+list_reduce_chisquare <- list()
+#list of a values
+list_a <- list()
+#list of b values 
+list_b <- list()
+for (i in 1:end) {
+  if(i %% 10 == 0) {
+    list_fits[[k]] <- nlsLM(ydata_long[[k]] ~ lin_func(xdata, a, b), 
+                            start=list(a=1, b=0.5))
+    list_a[[k]] <- coef(list_fits[[k]])[[1]]
+    list_b[[k]] <- coef(list_fits[[k]])[[2]]
+    list_chisquare[[k]] <- sum((predict(list_fits[[k]])-ydata_long[[k]]) ^ 2)/(sigma ^ 2)
+    list_reduce_chisquare[[k]] <- list_chisquare[[k]]/(length(ydata_long[[k]])-2)
+    k <- k + 1
+  }
+}
+list_fits[c(1:2)]
+```
+
+I just showed 2 of our models for the above Monte Carlo simulations. I'm going to make a data frame from the parameter values and the chi-square and reduced chi-square values, for ease of future use.
+
+```{r data_frame_fits}
+fit_data <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b, "chisquare"=list_chisquare, "reduced.chisquare"=list_reduce_chisquare))
+#head(fit_data)
+just_param <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b))
+```
+
+Now I can plot the values of the parameters.
+
+```{r param_plot}
+#plot(fit_data$a.values, fit_data$b.values, xlab="a values", ylab="b values")
+
+
+dataEllipse(fit_data$a.values, fit_data$b.values, levels=c(0.68), ylab="b values", xlab="a values", ellipse.label=c("68%"), main="Parameter value estimates from linear model fit for number of events over time")
+legend("bottomleft", c("68% confidence ellipse"), col=c("blue"), lwd=10)
+# center of the ellipse
+(ell.info <- cov.wt(cbind(fit_data$a.values, fit_data$b.values)))
+# directions of the axes are accessible as the eigenvectors of the covariance matrix
+(eigen.info <- eigen(ell.info$cov))
+# length of the axes
+(lengths <- sqrt(eigen.info$values * 2 * qf(.95, 2, length(fit_data$a.values)-1)))
+# 4 endpoints of ellipse
+#ell.info$center + lengths[1] * eigen.info$vectors[,1]
+#ell.info$center - lengths[1] * eigen.info$vectors[,1]
+#ell.info$center + lengths[2] * eigen.info$vectors[,2]
+#ell.info$center - lengths[2] * eigen.info$vectors[,2]
+#a_val <- ell.info$center[1]
+#b_val <- ell.info$center[2]
+```
+
+Here we can see the scatterplots made from the possible parameter values from the Monte Carlo simulations. What we are doing here is jittering the possible y-values that we can get and trying to see if the parameter values converge on a solution. That solution is the center of the ellipse shown above, where we have include the 68% confidence interval. For linear regression we should have an agreement between the parameter values found in this method and the ones found from the model fit itself. This method of using MC sims comes more into play for out nonlinear model fits, which are preferred in certain scenarios. 
+
+## Sports
+
+I'm going to not look at all the sports but only a few of them in order to create my models. I'm going to choose "top" sports by the numbers of atheletes participating in them. 
+
+```{r filter_data_func}
+filter_data <- function(df, sport) {
+  df %>%
+    filter(Sport == sport) %>% 
+    group_by(Year, Sex) %>%
+    summarise(
+      mean.Age = mean(Age, na.rm = TRUE),
+      sd.Age = sd(Age, na.rm = TRUE),
+      mean.Weight = mean(Weight, na.rm = TRUE),
+      sd.Weight = sd(Weight, na.rm = TRUE),
+      mean.Height = mean(Height, na.rm = TRUE),
+      sd.Height = sd(Height, na.rm = TRUE)
+  )
+}
+```
+
+```{r make_plots_func}
+make_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
+  var_name_x <- eval(substitute(xVal),eval(df))
+  var_name_y <- eval(substitute(yVal),eval(df))
+  ggplot(df, mapping = aes(x = var_name_x, y = var_name_y, group = Sex, 
+                                        color = Sex)) + geom_point(size=2) + 
+    geom_line() +
+    labs(title=paste(varNameY, " of Olympic Athletes in ", sport, "\nSeparated by Gender Over ", varNameX),
+         x=paste(varNameX, unitX), y=paste(varNameY, unitY)) +
+    theme_minimal() +
+    theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
+}
+```
+
+### Swimming
+
+```{r}
+sports <- olympic_data %>% 
+  filter(!is.na(Sport)) 
+
+#head(sports)
+swimming <- filter_data(sports, "Swimming")
+#head(swimming)
+
+make_plots(swimming, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(swimming, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(swimming, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+
+#grid.arrange(swimming_age, swimming_weight, swimming_height, nrow = 1, ncol = 3)
+```
+
+```{r func6_make_model_plots, results='markup'}
+#make plots with the model fits
+#to use the function write something like the following:
+#make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+make_model_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
+  var_name_x <- eval(substitute(xVal), eval(df))
+  var_name_y <- eval(substitute(yVal), eval(df))
+  #linear model fit
+  mod_lin <- nlsLM(var_name_y ~ lin_func(var_name_x, a1, b1), 
+                   start=list(a1=1, b1=10))
+  #quadratic model fit
+  mod_quad <- nlsLM(var_name_y ~ quad_func(var_name_x, a1, b1, c1), 
+                    start=list(a1=1, b1=1, c1=1))
+  #cubic model fit
+  mod_cubic <- nlsLM(var_name_y ~ cubic_func(var_name_x, a1, b1, c1, d1), 
+                     start=list(a1=1, b1=1, c1=1, d1=1))
+  #exponential model fit
+  mod_exp <- nlsLM(var_name_y ~ exp_func(var_name_x, a1, b1, c1), 
+                   start=list(a1=1, b1=0, c1=1))
+  #plot data without models
+  data_plot <- ggplot(df, aes(x = var_name_x, y = var_name_y, color = Sex)) + 
+    geom_point() +
+    theme_minimal() +
+    labs(title=paste(varNameY, "of Olympic Athletes in", sport, "Over", varNameX), 
+         x=paste(varNameX, unitX), y=paste(varNameY, unitY)) + 
+    theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+  #manually add each line for a model
+  plot_models <- data_plot + geom_line(aes(x=var_name_x, y=predict(mod_lin)), color="red") + 
+    geom_line(aes(x=var_name_x, y=predict(mod_quad)), color="orange") +
+    geom_line(aes(x=var_name_x, y=predict(mod_cubic)), color="green") +
+    geom_line(aes(x=var_name_x, y=predict(mod_exp)), color="blue")
+  #calculate the anova results
+  anova_res1exp <- anova(mod_lin, mod_exp) 
+  anova_res123 <- anova(mod_lin, mod_quad, mod_cubic) 
+  #return the plot with model lines, the anova results, and chisquare/dof statistic for each model
+  return(list(plot_models, anova_res1exp, anova_res123, calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4)))
+}
+#output will be in a nested list
+#for example you would do the following to call the results:
+# results <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+# and to call the plot results you would write
+# plot <- results[[1]]
+# anova_linear_exponential <- results[[2]]
+# anova_lin_quad_cubic <- results[[3]]
+# chisquare_exponential <- results[[4]]
+# chisquare_linear <- results[[5]]
+# chisquare_quadratic <- results[[6]]
+# chisquare_cubic <- results[[7]]
+```
+
+```{r func7_comb_anova, results='markup'}
+#function to combine the anove results with the model list
+#same idea as the chisquare function earlier
+combine_anova <- function(anova_results, model_list) {
+  anova_res <- cbind("Models"=model_list, anova_results)
+  return(anova_res)
+}
+```
+
+#### Female Swimmers
+
+```{r swimming_model_plots, results='markup'}
+# model_list_1exp <- c("Linear", "Exponential")
+# model_list_123 <- c("Linear", "Quadratic", "Cubic")
+# model_list <- c("Linear", "Exponential", "Quadratic", "Cubic")
+
+index_F <- which(swimming$Sex == "F")
+swimming_F <- swimming[index_F, ]
+
+res_Swimming_Age <- make_model_plots(swimming_F, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Swimming_Age[[1]]
+
+combine_anova(res_Swimming_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Age[[4]], res_Swimming_Age[[5]], res_Swimming_Age[[6]], res_Swimming_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Weight <- make_model_plots(swimming_F, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Swimming_Weight[[1]]
+
+combine_anova(res_Swimming_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Weight[[4]], res_Swimming_Weight[[5]], res_Swimming_Weight[[6]], res_Swimming_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Height <- make_model_plots(swimming_F, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Swimming_Height[[1]]
+
+combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Height[[4]], res_Swimming_Height[[5]], res_Swimming_Height[[6]], res_Swimming_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+##### MC simulations
+
+We saw that for the mean ages of female swimming the cubic nonlinear model was much preferred. I'm going to perform MC simulations for that model. 
+
+```{r fit_ydata_cubic}
+mc_cubic <- function(numSims, df, xInput, yInput) {
+  # seed
+  set.seed(666)
+  #list from fits
+  list_fits <- list()
+  #list for chisquare vals
+  list_chisquare <- list()
+  #list for reduced chi-square vals
+  list_reduce_chisquare <- list()
+  #list of a values
+  list_a <- list()
+  #list of b values 
+  list_b <- list()
+  #list of c values 
+  list_c <- list()
+  #list of b values 
+  list_d <- list()
+  # cubic model function, it takes 5 inputs
+  cubic_func <- function(x, a, b, c, d) {
+    a*x*x*x + b*x*x + c*x + d 
+  }
+  var_x <- eval(substitute(xInput), eval(df))
+  var_y <- eval(substitute(yInput), eval(df))
+  # MC sims
+  for (i in 1:numSims) {
+    temp_y <- rnorm(length(var_x), mean=var_y, sd=0.1)
+    list_fits[[i]] <- nlsLM(temp_y ~ cubic_func(var_x, a, b, c, d), 
+                              start=list(a=1, b=1, c=1, d=1))
+    list_a[[i]] <- coef(list_fits[[i]])[[1]]
+    list_b[[i]] <- coef(list_fits[[i]])[[2]]
+    list_c[[i]] <- coef(list_fits[[i]])[[3]]
+    list_d[[i]] <- coef(list_fits[[i]])[[4]]
+    }
+  params <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b,
+                               "c.values"=list_c, "d.values"=list_d))
+  return(params)
+}
+```
+
+I will do 500 simulations.
+
+```{r swim_cubic_param}
+swim_f_age_cubic <- mc_cubic(500, swimming_F, Year, mean.Age)
+head(swim_f_age_cubic)
+loadPkg(PerformanceAnalytics)
+chart.Correlation(swim_f_age_cubic, histogram=TRUE, pch=19)
+```
+
+Here we can see the histograms of the parameters, the correlations of the parameters with each other, and the scatterplots. We want the centers of those scatterplots/ellipses to get the values of our parameters $a,b,c,d$ from the cubic nonlinear model $y=ax^3 + bx^2 + cx + s$. 
+
+```{r func_make_ellipses}
+draw_ellipses_df <- function(df, conf_Int, conf_Int_Name) {
+  loadPkg(car)
+  for(i in 1:(ncol(df)-1)) {
+    for(j in (i+1):ncol(df)) {
+      if(j != i) {
+        dataEllipse(df[,i], df[,j], levels=c(conf_Int), 
+                    ylab=paste("param", colnames(df)[j]), 
+                    xlab=paste("param", colnames(df)[i]), 
+                    ellipse.label=c(conf_Int_Name) 
+                    )
+        legend("bottomleft", c(conf_Int_Name), col=c("blue"), lwd=10)
+      }
+    }
+  }
+}
+```
+
+```{r param_ellipses_swim_f_age}
+par(mfrow=c(2,3))
+draw_ellipses_df(swim_f_age_cubic, 0.68, "68%")
+```
+
+#### Male Swimmers
+
+```{r male_swim, results='markup'}
+index_M <- which(swimming$Sex == "M")
+swimming_M <- swimming[index_M, ]
+
+res_Swimming_Age <- make_model_plots(swimming_M, "Swimming", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Swimming_Age[[1]]
+
+combine_anova(res_Swimming_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Age[[4]], res_Swimming_Age[[5]], res_Swimming_Age[[6]], res_Swimming_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Weight <- make_model_plots(swimming_M, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Swimming_Weight[[1]]
+
+combine_anova(res_Swimming_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Weight[[4]], res_Swimming_Weight[[5]], res_Swimming_Weight[[6]], res_Swimming_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Swimming_Height <- make_model_plots(swimming_M, "Swimming", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Swimming_Height[[1]]
+
+combine_anova(res_Swimming_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Swimming_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Swimming_Height[[4]], res_Swimming_Height[[5]], res_Swimming_Height[[6]], res_Swimming_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
+We can see that the chi-square/d.o.f. blows up for both female and male swimmers when considering their weights and heights. This is because the calculation of the chi-square statistic uses the standard deviation, and the standard deviation needs to be both independent and normally-distributed. This is true for the ages but not for the weights and heights of the athletes, so the chi-square statistic is unreliable. Instead we must rely on the ANOVA/F-test. 
+
+### Athletics
+
+```{r athletics_plots}
+athletics <- filter_data(sports, "Athletics")
+
+make_plots(athletics, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(athletics, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(athletics, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+#### Female Athletes
+
+```{r}
+index_F <- which(athletics$Sex == "F")
+athletics_F <- athletics[index_F, ]
+
+res_Age <- make_model_plots(athletics_F, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(athletics_F, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Height <- make_model_plots(athletics_F, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
+
+
+#### Male Athletes
+```{r}
+index <- which(athletics$Sex == "M")
+athletics_G <- athletics[index, ]
+
+res_Age <- make_model_plots(athletics_G, "Athletics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+res_Weight <- make_model_plots(athletics_G, "Athletics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+res_Weight[[1]]
+
+combine_anova(res_Weight[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Weight[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Weight[[4]], res_Weight[[5]], res_Weight[[6]], res_Weight[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+
+res_Height <- make_model_plots(athletics_G, "Athletics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+res_Height[[1]]
+
+combine_anova(res_Height[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Height[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Height[[4]], res_Height[[5]], res_Height[[6]], res_Height[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+### Gymnastics
+
+```{r gymnastics_plots}
+gymnastics <- filter_data(sports, "Gymnastics")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+
+make_plots(gymnastics, "Gymnastics", "Years", "Average Height", Year, mean.Height, "[years]","[cm]")
+```
+
+#### Female Gymnasts
+
+```{r female_gym_age_model}
+index <- which(gymnastics$Sex == "F")
+gymnastics_G <- gymnastics[index, ]
+
+res_Age <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+I was unable to fit the weight and height data due to its highly irregular shape, and it has thus not been included. 
+
+##### MC Sims
+
+I am going to fit the Female Gymnasts age data with a quadratic model, because it is preferred by the ANOVA test.
+
+```{r fit_ydata_quad}
+mc_quad <- function(numSims, df, xInput, yInput) {
+  # seed
+  set.seed(666)
+  #list from fits
+  list_fits <- list()
+  #list for chisquare vals
+  list_chisquare <- list()
+  #list for reduced chi-square vals
+  list_reduce_chisquare <- list()
+  #list of a values
+  list_a <- list()
+  #list of b values 
+  list_b <- list()
+  #list of c values 
+  list_c <- list()
+  #list of b values 
+  #list_d <- list()
+  # cubic model function, it takes 5 inputs
+  quad_func <- function(x, a, b, c) {
+    a*x*x + b*x + c 
+  }
+  var_x <- eval(substitute(xInput), eval(df))
+  var_y <- eval(substitute(yInput), eval(df))
+  # MC sims
+  for (i in 1:numSims) {
+    temp_y <- rnorm(length(var_x), mean=var_y, sd=0.1)
+    list_fits[[i]] <- nlsLM(temp_y ~ quad_func(var_x, a, b, c), 
+                              start=list(a=1, b=1, c=1))
+    list_a[[i]] <- coef(list_fits[[i]])[[1]]
+    list_b[[i]] <- coef(list_fits[[i]])[[2]]
+    list_c[[i]] <- coef(list_fits[[i]])[[3]]
+    }
+  params <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b,
+                               "c.values"=list_c))
+  return(params)
+}
+```
+
+```{r}
+gym_f_age_quad <- mc_quad(500, gymnastics_G, Year, mean.Age)
+head(gym_f_age_quad)
+chart.Correlation(gym_f_age_quad, histogram=TRUE, pch=19)
+par(mfrow=c(2,2))
+draw_ellipses_df(gym_f_age_quad, 0.68, "68%")
+```
+
+From the simulations we see what the values of the parameters trend towards, which are the centers of the ellipses. We have to check to see what the parameter values $a,b,c$ from the quadratic nonlinear model $y=ax^2 + bx +c$ will be because this is not linear regression.
+
+
+
+#### Male Gymnasts
+
+```{r male_gymnasts}
+index <- which(gymnastics$Sex == "M")
+gymnastics_G <- gymnastics[index, ]
+
+res_Age <- make_model_plots(gymnastics_G, "Gymnastics", "Years", "Average Age", Year, mean.Age, "[years]","[years]")
+res_Age[[1]]
+
+combine_anova(res_Age[[2]], model_list_1exp) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+combine_anova(res_Age[[3]], model_list_123) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+chi_vals <- c(res_Age[[4]], res_Age[[5]], res_Age[[6]], res_Age[[7]])
+make_df(mod_list, chi_vals) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Results from models over time
+
+We can see from our models that you might not want to always use linear regression, and that a nonlinear model might be better suited. We can check if a nonlinear model is preferred by using ANOVA or the chi-square test, but sometimes there might be issues with these tests (such as the standard deviation of the data not being independent or normally distributed).
+
+For these nonlinear models we need to perform something like Monte Carlo simulations, where we "jitter" the y-data and perform many simulations to see if the parameter values of the model will change as we have more and more data (frequentist approach). From these MC simulations then we can see what values the parameters converge upon by looking at their correlations to one another, the histograms of their values, and the scatterplots of two of the parameters and the resulting confidence ellipses. The centers of these ellipses will be the value of the parameter that should ultimately be used in our model. 
+
+```{r unload_izzy, ech0=F}
+unloadPkg(PerformanceAnalytics)
+unloadPkg(car)
+unloadPkg(minpack.lm)
+unloadPkg(kableExtra)
+unloadPkg(tidyverse)
+unloadPkg(factoextra)
+unloadPkg(caret)
+unloadPkg(ggcorrplot)
+unloadPkg(ggplot2)
+```
+
 # References
 
