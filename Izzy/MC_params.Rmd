@@ -1,0 +1,391 @@
+---
+title: "Olympic Data"
+author: "Izzy Illari"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmdformats::readthedown:
+    css: styles.css
+    highlight: kate
+    code_folding: hide
+    number_sections: yes
+    keep_tex: yes
+    includes:
+        after_body: github.html
+bibliography: bibliography.bib
+csl: american-institute-of-physics.csl
+---
+
+```{r clear, include=F}
+rm(list = ls(all.names = TRUE))
+gc() 
+```
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r setup, echo=FALSE, cache=FALSE}
+loadPkg(knitr)
+loadPkg(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+# Import the data
+
+```{r import_data}
+olympic_data <- data.frame(read.csv("olympic_data.csv"))
+olympic_data$BMI.Category <- as.factor(olympic_data$BMI.Category)
+olympic_data$Medal.No.Yes <- as.factor(olympic_data$Medal.No.Yes)
+head(olympic_data)
+str(olympic_data)
+# loadPkg(psych)
+# pairs.panels(olympic_data, #data frame 
+#              method = "pearson", # correlation method
+#              hist.col = "#00AFBB", # set histogram color, can use "#22AFBB", "red",
+#              density = TRUE,  # show density plots
+#              ellipses = TRUE # show correlation ellipses
+#              )
+# unloadPkg(psych)
+```
+
+```{r}
+loadPkg(minpack.lm)
+loadPkg(kableExtra)
+loadPkg(ggplot2)
+loadPkg(tidyverse)
+```
+
+Number of sports per year at the https://www.topendsports.com/events/summer/sports/number.htm [@WoodOlympEvents]
+
+```{r}
+sports_dat <- data.frame(read.csv("sports_per_year.csv"))
+
+ggplot(sports_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  geom_line() + 
+  ylim(0, 40) + 
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years", 
+       x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
+
+There is clearly an upward trend, but no seasonal pattern. The data is also a little choppy at the beginning. Part of the explanation is that the data points are not evenly spaced. Most Olympic games are 4 years apart, but a few of them are just 2 years apart, and during World War I and World War II there were 8-year and 12-year gaps, respectively. Since time series data should be evenly spaced over time, we'll only look at data from 1948 on, when the Olympics started being held every 4 years without any interruptions.
+
+```{r}
+index_1948 <- which(sports_dat$Year == 1948)
+use_dat <- sports_dat[12:nrow(sports_dat),]
+ggplot(use_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  geom_line() + 
+  ylim(0, 40) + 
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years \n starting from 1948", 
+       x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
+
+# Creating models
+
+I'm going to try 4 different models.
+
+$$
+y_{\text{linear}}(x) = ax+b \\
+y_{\text{quadratic}}(x) = ax^2 + bx + c \\
+y_{\text{cubic}}(x) = ax^3 + bx^2 + cx + d \\
+y_{\text{exponential}}(x) = a\exp(bx) + c
+$$
+
+And I'll be able to use `ANOVA` to test the nested models: linear vs quadratic, and exponential growth vs s-curve (sigmoid). 
+
+```{r func1}
+# linear model function, it takes 3 inputs
+lin_func <- function(x, a, b) {
+  a*x+b
+}
+# quadratic model function, it takes 4 inputs
+quad_func <- function(x, a, b, c) {
+  a*x*x + b*x + c
+}
+# cubic model function, it takes 5 inputs
+cubic_func <- function(x, a, b, c, d) {
+  a*x*x*x + b*x*x + c*x + d 
+}
+# exponential model function, it takes 4 inputs
+exp_func <- function(x, a, b, c) {
+  a*exp(b*x) + c
+}
+```
+
+## Chi-square "rule of thumb"
+
+We consider $m$ equations that relate the $n$ random variables with values
+
+$$
+y_j = f(a_1,...,a_m,x_j) + \epsilon_j, ~~~~~ j = 1,...,n
+$$
+
+If we assume that only the $n-m$ random variables can fluctuate independently, and that the data uncertainties follow a Normal distribution, then the resulting chi-square is expected to be distributed according to
+
+$$
+\chi^2_{\nu}, ~~~~~ \nu = n - m
+$$
+
+Which we can compare to the "rule of thumb", which is
+
+$$
+\text{if } \frac{\chi^2}{n-m} \approx 1 ~~~ \text{where }\nu = n - m \implies \text{ "a good fit"}
+$$
+
+If we have $\nu$ independent RVs and the $x_i$ are each normally distributed with mean $\mu_i$ and variance $\sigma1_i^2$, then the chi-square is,
+
+$$
+\frac{\chi^2}{n-m} = \frac{\sum_{i=1}^{\nu} (x_i-\mu_i)^2/\sigma_i^2}{n-m}
+$$
+
+where $n$ is the length of our y data and $m$ is the degree of the polynomial. Using the above equation, we can calculate the values for our $\chi^2$ "rule of thumb".
+
+```{r func2}
+#calculates the chisquare/dof statistic
+calc_chisquare <- function (model, yDat, degree) {
+  # degree of exp = 1
+  # deg of lin = 2
+  # deg of quad = 3
+  # deg of cubic = 4
+  chisquare <- (sum((predict(model)-yDat) ^ 2)/(sd(yDat) ^ 2))/(length(yDat)-degree)
+  chisquare <- round(chisquare, 3)
+  return(chisquare)
+}
+```
+
+## Model Fits
+
+### Number of events over time
+
+Now I will try the model fits on the number of events per Olympic Games data. 
+
+```{r}
+xdata <- use_dat$Year
+ydata <- use_dat$Num.Sports
+
+mod_lin <- nlsLM(ydata~lin_func(xdata, a1, b1), start=list(a1=1, b1=10))
+summary(mod_lin)
+summary(lm(Num.Sports~Year, data=use_dat))
+mod_quad <- nlsLM(ydata~quad_func(xdata, a1, b1, c1), start=list(a1=1, b1=1, c1=1))
+mod_cubic <- nlsLM(ydata~cubic_func(xdata, a1, b1, c1, d1), start=list(a1=1, b1=1, c1=1, d1=1))
+mod_exp <- nlsLM(ydata~exp_func(xdata, a1, b1, c1), start=list(a1=1, b1=0, c1=1))
+
+data_plot <- ggplot(use_dat, aes(x = Year, y=Num.Sports)) + 
+  geom_point() + 
+  ylim(0, 40) + xlim(1948, 2020) +
+  theme_minimal() +
+  labs(title="Plot of the number of sports at the Olympic Game over the years \n starting from 1948", x="Year", y="Number of sports") + 
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1),
+        axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+
+data_plot + geom_line(aes(x=xdata, y=predict(mod_lin)), color="red") + 
+  geom_line(aes(x=xdata, y=predict(mod_quad)), color="orange") +
+  geom_line(aes(x=xdata, y=predict(mod_cubic)), color="green") +
+  geom_line(aes(x=xdata, y=predict(mod_exp)), color="blue")
+```
+
+```{r}
+model_list_1exp <- c("Linear", "Exponential")
+model_list_123 <- c("Linear", "Quadratic", "Cubic")
+
+anova_results1exp <- anova(mod_lin, mod_exp)
+anova_results123 <- anova(mod_lin, mod_quad, mod_cubic) 
+
+anova_res1exp <- cbind("Models"=model_list_1exp, anova_results1exp)
+anova_res123 <- cbind("Models"=model_list_123, anova_results123)
+
+anova_res1exp %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+anova_res123 %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r func3}
+#makes a dataframe from two lists, where the first list should be the models and the second list should be the chisquare/dof statistic
+make_df <- function(list1, list2) {
+  # first list should be model list
+  # second list should be chi-square/dof values
+  matrix <- cbind("Model"=list1, "Chi^2/d.o.f"=list2)
+  matrix <- as.data.frame(matrix)
+  return(matrix)
+}
+```
+
+```{r}
+chisquare_list <- c(calc_chisquare(mod_exp, ydata, 1), calc_chisquare(mod_lin, ydata, 2), calc_chisquare(mod_quad, ydata, 3), calc_chisquare(mod_cubic, ydata, 4))
+chisquare_list <- as.numeric(chisquare_list)
+mod_list <- c("Exponential", "Linear", "Quadratic", "Cubic")
+make_df(mod_list, chisquare_list) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r func4}
+#function to filter data and creates a new data frame
+#input is the data frame and the name of the sport
+#eg use the following: filter_data(olympic_data, "Rowing")
+filter_data <- function(df, sport) {
+  #filters input dataframe by the Sport and groups the results by Year and Sex
+  df %>% 
+    filter(Sport == sport) %>% 
+    group_by(Year, Sex) %>%
+    summarise(
+      #calculates mean age for each year
+      mean.Age = mean(Age, na.rm = TRUE), 
+      #calculates standard deviation of age for each year
+      sd.Age = sd(Age, na.rm = TRUE),
+      #calculates mean weight for each year
+      mean.Weight = mean(Weight, na.rm = TRUE),
+      #calculates standard deviation of weight for each year
+      sd.Weight = sd(Weight, na.rm = TRUE),
+      #calculates mean height for each year
+      mean.Height = mean(Height, na.rm = TRUE),
+      #calculates standard deviation of height for each year
+      sd.Height = sd(Height, na.rm = TRUE)
+  )
+}
+```
+
+```{r func5}
+#function to make the ggplots using the data frames created by the above function
+#input should be in the following style:
+# make_plots(swimming, "Swimming", "Years", "Average Weight", Year, mean.Weight, "[years]","[kg]")
+make_plots <- function(df, sport, varNameX, varNameY, xVal, yVal, unitX, unitY) {
+  var_name_x <- eval(substitute(xVal),eval(df))
+  var_name_y <- eval(substitute(yVal),eval(df))
+  ggplot(df, mapping = aes(x = var_name_x, y = var_name_y, group = Sex, 
+                                        color = Sex)) + geom_point(size=2) + 
+    geom_line() +
+    labs(title=paste(varNameY, " of Olympic Athletes in ", sport, "\nSeparated by Gender Over ", varNameX),
+         x=paste(varNameX, unitX), y=paste(varNameY, unitY)) +
+    theme_minimal() +
+    theme(panel.border = element_rect(colour = "black", fill=NA, size=1)) 
+}
+```
+
+According to the ANOVA test the best fit is the linear line and adding complexity to the model does not help us very much. F-tests are more sensitive to over-fitting than the chi-square test, so even though the chi-square/dof statistic shows a preference for the more complex models we sort of anticipated that result. Now I am going to run the MC simulations of this data. I will introduce a pseudorandom noise in the y data using N(0,$\sigma$), where the standard deviation has been calculated from the original y data itself. 
+
+```{r}
+#xdata <- use_dat$Year
+#ydata <- use_dat$Num.Sports
+ydata_long <- list()
+xdata_long <- list()
+sigma <- sd(ydata)
+end = as.integer(10 ^ 4)
+for (i in 1:end) {
+  xdata_long[[i]] <- xdata
+  ydata_long[[i]] <- rnorm(length(xdata), mean=lin_func(xdata, 0.20658, -387.01053), sd=sigma)
+  #plot(xdata, ydata[[i]])
+}
+xdata_long_unlist <- as.numeric(unlist(xdata_long))
+ydata_unlist <- as.numeric(unlist(ydata_long))
+plot(xdata_long_unlist, ydata_unlist, main="10 ^ 4 datasets", ylab="y", xlab="x")
+```
+
+```{r fit_ydata}
+k <- as.integer(1)
+#list from fits
+list_fits <- list()
+#list for chisquare vals
+list_chisquare <- list()
+#list for reduced chi-square vals
+list_reduce_chisquare <- list()
+#list of a values
+list_a <- list()
+#list of b values 
+list_b <- list()
+for (i in 1:end) {
+  if(i %% 10 == 0) {
+    list_fits[[k]] <- nlsLM(ydata_long[[k]] ~ lin_func(xdata, a, b), 
+                            start=list(a=1, b=0.5))
+    list_a[[k]] <- coef(list_fits[[k]])[[1]]
+    list_b[[k]] <- coef(list_fits[[k]])[[2]]
+    list_chisquare[[k]] <- sum((predict(list_fits[[k]])-ydata_long[[k]]) ^ 2)/(sigma ^ 2)
+    list_reduce_chisquare[[k]] <- list_chisquare[[k]]/(length(ydata_long[[k]])-2)
+    k <- k + 1
+  }
+}
+list_fits[c(1:5)]
+```
+
+I'm going to make a data frame from the parameter values and the chi-square and reduced chi-square values, for ease of future use.
+
+```{r data_frame_fits}
+fit_data <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b, "chisquare"=list_chisquare, "reduced.chisquare"=list_reduce_chisquare))
+head(fit_data)
+just_param <- do.call(rbind, Map(data.frame, "a.values"=list_a, "b.values"=list_b))
+```
+
+Now I can plot the values of the parameters.
+
+```{r param_plot}
+plot(fit_data$a.values, fit_data$b.values, xlab="a values", ylab="b values")
+
+loadPkg(car)
+dataEllipse(fit_data$a.values, fit_data$b.values, levels=c(0.68), ylab="b values", xlab="a values", ellipse.label=c("68%"), main="Parameter value estimates from linear model fit for number of events over time")
+legend("bottomleft", c("68% confidence ellipse"), col=c("blue"), lwd=10)
+# center of the ellipse
+(ell.info <- cov.wt(cbind(fit_data$a.values, fit_data$b.values)))
+# directions of the axes are accessible as the eigenvectors of the covariance matrix
+(eigen.info <- eigen(ell.info$cov))
+# length of the axes
+(lengths <- sqrt(eigen.info$values * 2 * qf(.95, 2, length(fit_data$a.values)-1)))
+# 4 endpoints of ellipse
+ell.info$center + lengths[1] * eigen.info$vectors[,1]
+ell.info$center - lengths[1] * eigen.info$vectors[,1]
+ell.info$center + lengths[2] * eigen.info$vectors[,2]
+ell.info$center - lengths[2] * eigen.info$vectors[,2]
+a_val <- ell.info$center[1]
+b_val <- ell.info$center[2]
+unloadPkg(car)
+```
+
+From our fit the $a$ value is `r a_val` and the $b$ value is `r b_val`. 
+
+```{r}
+unloadPkg(minpack.lm)
+unloadPkg(kableExtra)
+unloadPkg(ggplot2)
+unloadPkg(tidyverse)
+```
+
+
+
+
+
+
+

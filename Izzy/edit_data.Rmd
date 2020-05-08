@@ -1,0 +1,61 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+loadPkg = function(pkg, character.only = FALSE) { 
+  if (!character.only) { pkg <- as.character(substitute(pkg)) }
+  pkg <- ifelse(!character.only, as.character(substitute(pkg)) , pkg)  
+  if (!require(pkg,character.only=T, quietly =T)) {  install.packages(substitute(pkg),dep=T); if(!require(pkg,character.only=T)) stop("Package not found") } 
+}
+loadPkg(knitr)
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r import}
+data <- data.frame(read.csv("/Users/iillari/Documents/GitHub/DATS-Model-Proj/OQ/Olympics_GDP.csv"))
+data$Medal_0_1 <- as.factor(data$Medal_0_1)
+data$Decade <- NA
+head(data)
+str(data)
+```
+
+```{r decades}
+index1960s <- which(data$Year >= 1960 & data$Year < 1970)
+index1970s <- which(data$Year >= 1970 & data$Year < 1980)
+index1980s <- which(data$Year >= 1980 & data$Year < 1990)
+index1990s <- which(data$Year >= 1990 & data$Year < 2000)
+index2000s <- which(data$Year >= 2000 & data$Year < 2010)
+index2010s <- which(data$Year >= 2010 & data$Year < 2020)
+
+data[ c(index1960s), ncol(data)] <- "1960s"
+data[ c(index1970s), ncol(data)] <- "1970s"
+data[ c(index1980s), ncol(data)] <- "1980s"
+data[ c(index1990s), ncol(data)] <- "1990s"
+data[ c(index2000s), ncol(data)] <- "2000s"
+data[ c(index2010s), ncol(data)] <- "2010s"
+data$Decade <- as.factor(data$Decade)
+head(data)
+str(data)
+#write.csv(data,"/Users/iillari/Documents/gwu/spring2020/intro_dats/model_proj/olympic_data.csv", row.names = F)
+```
+
+```{r}
+data <- data.frame(read.csv("/Users/iillari/Documents/gwu/spring2020/intro_dats/model_proj/olympic_data.csv"))
+head(data)
+str(data)
+```
+
