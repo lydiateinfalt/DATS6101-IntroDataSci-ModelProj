@@ -6,6 +6,8 @@ You may contact me at izzy@jlab.org or iti2103@gwu.edu for more info.
 
 Included is the work on the class project with fellow teammates Lucia Illari (loi2102@gwu.edu), Lydia Teinfalt (lteinfalt@gwu.edu), Omar Qusous (oqusous@gwu.edu).
 
+To see a live version of the final project write up please go here [here](https://userweb.jlab.org/~izzy/DATS6101_Spring2020/final_project.html).
+
 Clone repo
 -----------
 
