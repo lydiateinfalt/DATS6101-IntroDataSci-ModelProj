@@ -172,6 +172,7 @@ To prepare our data for EDA we dropped the Olympic event: Art Sculpting. NAs wer
 8. GDPpC (numeric)
 9. Medal: Yes or No (factor)
 
+We can quickly view all the empty elements in our data, which, as part of our cleaning, we will remove:
 
 ```{r remove_NAs, echo = FALSE}
 olympic.data <- olympic_data
@@ -209,7 +210,7 @@ olympic_data$Sport.Int <- c(as.numeric(as.factor(olympic_data$Sport)))
 
 # Olympics Correlation plot
 
-Just quickly visualizing thw correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are noturally going to be highly correlated.
+Just quickly visualizing the correlation will be useful for model building, but we have to be mindful of the fact that columns such as Medal and Medal.No.Yes are naturally going to be highly correlated.
 
 ```{r subset_corr, echo = FALSE}
 loadPkg("dplyr")
@@ -884,7 +885,7 @@ plot(h.s2)
 pROC::auc(h.s2)
 ```
 
-The area under the curve is 'r pROC::auc(h.s2)' and the true negative percentage was `r regclass::confusion_matrix(glm.s2)[1]/(regclass::confusion_matrix(glm.s2)[1]+regclass::confusion_matrix(glm.s2)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.s2)[5]/(regclass::confusion_matrix(glm.s2)[2]+regclass::confusion_matrix(glm.s2)[5])*100`%. Softball (and baseball) were removed from the Olympics because the USA and Japan dominated the sport at the Olympics, and it is clear here, looking at these models, that you can predict the chance of being awarded a model based solely on where the team was coming from. Of course, removing Softball from the Olympics had far reaching, negative impacts that are still felt by the sport years later… But it makes sense looking at these logistical regression models why there was felt a need to remove Softball and Baseball from the Olympics.
+The area under the curve is `r pROC::auc(h.s2)` and the true negative percentage was `r regclass::confusion_matrix(glm.s2)[1]/(regclass::confusion_matrix(glm.s2)[1]+regclass::confusion_matrix(glm.s2)[4])*100`% and the true positive percentage was `r regclass::confusion_matrix(glm.s2)[5]/(regclass::confusion_matrix(glm.s2)[2]+regclass::confusion_matrix(glm.s2)[5])*100`%. Softball (and baseball) were removed from the Olympics because the USA and Japan dominated the sport at the Olympics, and it is clear here, looking at these models, that you can predict the chance of being awarded a model based solely on where the team was coming from. Of course, removing Softball from the Olympics had far reaching, negative impacts that are still felt by the sport years later… But it makes sense looking at these logistical regression models why there was felt a need to remove Softball and Baseball from the Olympics.
 
 For some sports, however, Age and Height do play a role, such as in Swimming, where Weight, GDP, and Population were not statistically significant:
 
